@@ -1,26 +1,280 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --nomi-bg-deep: #050508;
+  --nomi-bg: #0a0a10;
+  --nomi-surface: rgba(255, 255, 255, 0.045);
+  --nomi-surface-strong: rgba(255, 255, 255, 0.08);
+  --nomi-border: rgba(255, 255, 255, 0.08);
+  --nomi-border-glow: rgba(139, 92, 246, 0.35);
+  --nomi-text: #f4f4f8;
+  --nomi-text-muted: #9898a8;
+  --nomi-accent-violet: #8b5cf6;
+  --nomi-accent-blue: #38bdf8;
+  --nomi-accent-teal: #2dd4bf;
+  --nomi-accent-rose: #f472b6;
+  --nomi-glow-violet: rgba(139, 92, 246, 0.45);
+  --nomi-glow-blue: rgba(56, 189, 248, 0.35);
+  --nomi-glow-teal: rgba(45, 212, 191, 0.3);
+  --nomi-shimmer: rgba(255, 255, 255, 0.06);
+  --nomi-radius: 0.875rem;
+  --nomi-radius-sm: 0.625rem;
+  /* Shell: compact top/bottom chrome (aligned with feed immersive) */
+  --nomi-header-h: 4.85rem;
+  --nomi-nav-h: 4.85rem;
+  --nomi-section-gap: 1.5rem;
+  /* Space above bottom nav / rail for immersive feed overlays */
+  --nomi-rail-pad: 6.85rem;
+  --nomi-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+  --background: var(--nomi-bg);
+  --foreground: var(--nomi-text);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-dm-sans);
+  --font-display: var(--font-syne);
+  --radius-nomi: var(--nomi-radius);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--nomi-bg-deep);
+  color: var(--nomi-text);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  min-height: 100dvh;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.35);
+  color: #fff;
+}
+
+/* Ambient page wash */
+.nomi-ambient {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(139, 92, 246, 0.18), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(56, 189, 248, 0.12), transparent 45%),
+    radial-gradient(ellipse 60% 40% at 0% 100%, rgba(244, 114, 182, 0.08), transparent 40%),
+    var(--nomi-bg-deep);
+  position: relative;
+}
+.nomi-ambient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image: var(--nomi-grain);
+  mix-blend-mode: overlay;
+}
+
+.nomi-ambient-immersive::before {
+  opacity: 0.35;
+}
+
+.nomi-feed-chrome {
+  /* Tighter bottom chrome: slimmer nav + compact action rail */
+  --nomi-rail-pad: 6.15rem;
+}
+
+.nomi-ambient-soft {
+  background:
+    radial-gradient(ellipse 100% 60% at 50% -10%, rgba(139, 92, 246, 0.12), transparent 50%),
+    var(--nomi-bg);
+}
+
+/* Glass — calmer, feed-consistent (lighter border, less inset shine) */
+.glass-panel {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.015) 100%
+  );
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.glass-panel-muted {
+  background: rgba(8, 8, 12, 0.62);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+/* Flat premium surface (cards / rows without heavy glass) */
+.nomi-surface-card {
+  border-radius: var(--nomi-radius);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Page typography */
+.nomi-kicker {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(196, 181, 253, 0.52);
+}
+
+.nomi-page-title {
+  font-family: var(--font-syne), ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f4f4f8;
+  line-height: 1.15;
+}
+
+@media (min-width: 768px) {
+  .nomi-page-title {
+    font-size: 1.625rem;
+  }
+}
+
+.nomi-page-desc {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.48);
+  max-width: 28rem;
+}
+
+/* Section headers — same rhythm as feed-adjacent screens */
+.nomi-section-title {
+  font-family: var(--font-syne), ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(244, 244, 248, 0.98);
+}
+
+.nomi-section-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* Glow utilities */
+.glow-cta {
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.2),
+    0 0 22px rgba(139, 92, 246, 0.28),
+    0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.glow-cta-hover:hover {
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.38),
+    0 0 30px rgba(139, 92, 246, 0.38),
+    0 10px 32px rgba(0, 0, 0, 0.4);
+}
+
+.glow-subtle {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+}
+
+.glow-edge-selected {
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.35),
+    0 0 24px rgba(56, 189, 248, 0.18);
+}
+
+.glow-focus:focus,
+.glow-focus:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(10, 10, 16, 0.9),
+    0 0 0 4px rgba(139, 92, 246, 0.35),
+    0 0 20px rgba(139, 92, 246, 0.2);
+}
+
+/* Card hover depth */
+.card-depth {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease;
+}
+.card-depth:hover {
+  transform: translateY(-2px) scale(1.01);
+}
+
+/* Shimmer skeleton */
+@keyframes nomi-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: nomi-shimmer 1.4s ease-in-out infinite;
+}
+
+/* Gradient text (selective) */
+@keyframes nomi-gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.text-gradient-nomi {
+  background: linear-gradient(
+    120deg,
+    #c4b5fd,
+    #38bdf8,
+    #2dd4bf,
+    #f472b6,
+    #c4b5fd
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: nomi-gradient-shift 8s ease infinite;
+}
+
+/* Scrollbar subtle */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.35) transparent;
+}
+
+/* Safe areas mobile */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+.tap-highlight-none {
+  -webkit-tap-highlight-color: transparent;
 }
