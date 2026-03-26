@@ -62,3 +62,31 @@ npm run vercel:env
 If neither Redis nor `NOMI_DB_FILE_PATH` is configured in production, the server now fails fast with a clear error so account/session persistence is not accidentally deployed in ephemeral mode.
 
 The easiest way to deploy is the [Vercel](https://vercel.com/new) import from GitHub flow. See [Next.js on Vercel](https://nextjs.org/docs/app/building-your-application/deploying) for more.
+
+## Persistence health check
+
+The app now exposes a read-only health endpoint at:
+
+`/api/health/persistence`
+
+It reports:
+- active persistence mode (`redis`, `file`, or `ephemeral`)
+- whether storage is durable
+- whether current env is production-ready for persistence
+
+Example:
+
+```json
+{
+  "ok": true,
+  "persistence": {
+    "mode": "redis",
+    "durable": true,
+    "productionReady": true,
+    "redisConfigured": true,
+    "filePathConfigured": false,
+    "allowEphemeral": false,
+    "environment": "production"
+  }
+}
+```

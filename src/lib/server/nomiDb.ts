@@ -6,6 +6,16 @@ import type { NomiDb } from "./nomiTypes";
 const REDIS_KEY = "nomi:db:v1";
 const FILE_REL = ["data", "nomi-cloud.json"];
 
+export type NomiPersistenceStatus = {
+  mode: "redis" | "file" | "ephemeral";
+  durable: boolean;
+  productionReady: boolean;
+  redisConfigured: boolean;
+  filePathConfigured: boolean;
+  allowEphemeral: boolean;
+  environment: string;
+};
+
 function emptyDb(): NomiDb {
   return {
     accountsById: {},
@@ -96,14 +106,31 @@ function isTruthyEnv(value: string | undefined): boolean {
   return ["1", "true", "yes", "on"].includes(normalized);
 }
 
-function assertProductionPersistenceConfigured() {
-  if (checkedProductionPersistence || process.env.NODE_ENV === "development") return;
-  checkedProductionPersistence = true;
+export function getNomiPersistenceStatus(): NomiPersistenceStatus {
   const hasRedis = !!redis;
   const hasFilePath = !!resolveFileDbPath();
   const allowEphemeral = isTruthyEnv(process.env.NOMI_ALLOW_EPHEMERAL_DB);
-  if (hasRedis || hasFilePath || allowEphemeral) {
-    if (allowEphemeral && !hasRedis && !hasFilePath) {
+  const environment = process.env.NODE_ENV ?? "development";
+  const mode: NomiPersistenceStatus["mode"] = hasRedis ? "redis" : hasFilePath ? "file" : "ephemeral";
+  const durable = mode !== "ephemeral";
+  const productionReady = environment === "development" ? true : durable || allowEphemeral;
+  return {
+    mode,
+    durable,
+    productionReady,
+    redisConfigured: hasRedis,
+    filePathConfigured: hasFilePath,
+    allowEphemeral,
+    environment,
+  };
+}
+
+function assertProductionPersistenceConfigured() {
+  if (checkedProductionPersistence || process.env.NODE_ENV === "development") return;
+  checkedProductionPersistence = true;
+  const status = getNomiPersistenceStatus();
+  if (status.mode !== "ephemeral" || status.allowEphemeral) {
+    if (status.mode === "ephemeral" && status.allowEphemeral) {
       warnEphemeralDbMode();
     }
     return;
