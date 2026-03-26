@@ -26,10 +26,11 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const isBodyObject = typeof body === "object" && body !== null;
+  const isBodyObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
   const pathname =
-    isBodyObject && "pathname" in body
-      ? (body as { pathname: unknown }).pathname
+    isBodyObject(body) && "pathname" in body
+      ? body.pathname
       : undefined;
   if (typeof pathname !== "string" || !pathname.trim()) {
     return NextResponse.json({ error: "Invalid upload request payload" }, { status: 400 });

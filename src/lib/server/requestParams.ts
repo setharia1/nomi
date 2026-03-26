@@ -13,6 +13,8 @@ export function parseOperationNameParam(raw: string | null): string | null {
   const name = decoded.trim();
   if (!name || name.length > MAX_OPERATION_NAME_LENGTH) return null;
   if (!OPERATION_NAME_RE.test(name)) return null;
+  if (name.includes("..")) return null;
+  if (name.startsWith("/") || name.endsWith("/")) return null;
   return name;
 }
 
