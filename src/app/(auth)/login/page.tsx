@@ -7,6 +7,10 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { useAuthStore } from "@/lib/auth/authStore";
+import {
+  loadLoginIdentifierSnapshot,
+  saveLastLoginInput,
+} from "@/lib/auth/loginIdentifierStore";
 import { cn } from "@/lib/cn";
 
 function LoginForm() {
@@ -21,6 +25,9 @@ function LoginForm() {
   const loginFn = useAuthStore((s) => s.login);
 
   const [emailOrUsername, setEmailOrUsername] = useState("");
+  const [rememberedIdentifiers, setRememberedIdentifiers] = useState<string[]>(
+    [],
+  );
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +38,32 @@ function LoginForm() {
     router.replace(nextPath);
   }, [ready, account, router, nextPath]);
 
+  useEffect(() => {
+    const snapshot = loadLoginIdentifierSnapshot();
+    const options = [
+      ...snapshot.emails,
+      ...snapshot.usernames.map((u) => `@${u}`),
+    ].filter((value, index, arr) => arr.indexOf(value) === index);
+    setRememberedIdentifiers(options.slice(0, 6));
+    const suggested =
+      snapshot.lastInputIdentifier ??
+      snapshot.lastSuccessfulIdentifier ??
+      options[0] ??
+      "";
+    if (suggested) {
+      setEmailOrUsername(suggested);
+    }
+  }, []);
+
   const onSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       setError(null);
       setBusy(true);
       try {
-        const res = await loginFn(emailOrUsername.trim(), password);
+        const normalizedIdentifier = emailOrUsername.trim();
+        saveLastLoginInput(normalizedIdentifier);
+        const res = await loginFn(normalizedIdentifier, password);
         if (res.error) {
           setError(res.error);
           return;
@@ -107,11 +133,31 @@ function LoginForm() {
             </label>
             <input
               value={emailOrUsername}
-              onChange={(e) => setEmailOrUsername(e.target.value)}
+              onChange={(e) => {
+                setEmailOrUsername(e.target.value);
+                saveLastLoginInput(e.target.value);
+              }}
               autoComplete="username"
               className="glow-focus mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/30 transition-colors focus:border-violet-400/35"
               placeholder="you@studio.ai or @handle"
             />
+            {rememberedIdentifiers.length ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {rememberedIdentifiers.map((identifier) => (
+                  <button
+                    key={identifier}
+                    type="button"
+                    onClick={() => {
+                      setEmailOrUsername(identifier);
+                      saveLastLoginInput(identifier);
+                    }}
+                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] text-white/60 transition-colors hover:border-violet-300/40 hover:text-white/90"
+                  >
+                    {identifier}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div>
             <label className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
