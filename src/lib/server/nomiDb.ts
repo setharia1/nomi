@@ -61,6 +61,11 @@ function getRedis(): Redis | null {
 
 const redis = getRedis();
 
+/** True when Upstash / REST env is configured (production persistence). */
+export function isNomiRedisConfigured(): boolean {
+  return redis !== null;
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var __nomiDbMem: NomiDb | undefined;
@@ -98,6 +103,19 @@ async function writeFileDb(db: NomiDb) {
   await fs.writeFile(fp, JSON.stringify(db), "utf8");
 }
 
+let warnedEphemeralProd = false;
+
+function warnEphemeralProduction(context: "load" | "save") {
+  if (warnedEphemeralProd) return;
+  if (process.env.NODE_ENV !== "production") return;
+  warnedEphemeralProd = true;
+  console.error(
+    `[nomi] Database ${context} uses EPHEMERAL memory on this host. Accounts, passwords, and posts will NOT survive ` +
+      `deploys or other instances. Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (or UPSTASH_REDIS_URL / REDIS_URL) ` +
+      `on Vercel. Run: npm run db:import-redis — to copy local data/nomi-cloud.json into Redis once.`,
+  );
+}
+
 export async function loadNomiDb(): Promise<NomiDb> {
   if (redis) {
     const raw = await redis.get<string>(REDIS_KEY);
@@ -111,6 +129,7 @@ export async function loadNomiDb(): Promise<NomiDb> {
   if (process.env.NODE_ENV === "development") {
     return readFileDb();
   }
+  warnEphemeralProduction("load");
   return getMemoryDb();
 }
 
@@ -123,6 +142,7 @@ export async function saveNomiDb(db: NomiDb) {
     await writeFileDb(db);
     return;
   }
+  warnEphemeralProduction("save");
   globalThis.__nomiDbMem = db;
 }
 

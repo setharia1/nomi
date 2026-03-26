@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "vercel:env": "node scripts/sync-vercel-env.mjs"
+    "vercel:env": "node scripts/sync-vercel-env.mjs",
+    "db:import-redis": "node scripts/import-nomi-db-to-redis.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",
