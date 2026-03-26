@@ -97,8 +97,22 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
     const token = useAuthStore.getState().token;
     const account = useAuthStore.getState().account;
 
-    let toSave = stamped;
-    if (token && account?.id) {
+    const upsertLocal = (nextPost: Post) => {
+      const rest = get().userPosts.filter((p) => p.id !== nextPost.id);
+      const nextLocal = [nextPost, ...rest];
+      set({ userPosts: nextLocal });
+      persistToDisk(nextLocal);
+    };
+
+    // Always complete publish immediately in UI. Network/media sync runs in background.
+    upsertLocal(stamped);
+
+    if (!token || !account?.id) {
+      return;
+    }
+
+    void (async () => {
+      let toSave = stamped;
       try {
         toSave = await withTimeout(
           ensurePostReachableMedia(stamped, account.id, token),
@@ -106,17 +120,14 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
           "Preparing post media",
         );
       } catch {
-        // Do not block publish forever when media upload/prep is slow.
+        // Keep optimistic post if media prep is slow/unavailable.
         toSave = stamped;
       }
-    }
 
-    const rest = get().userPosts.filter((p) => p.id !== toSave.id);
-    const nextLocal = [toSave, ...rest];
-    set({ userPosts: nextLocal });
-    persistToDisk(nextLocal);
+      if (toSave.id !== stamped.id || toSave.imageUrl !== stamped.imageUrl || toSave.videoUrl !== stamped.videoUrl) {
+        upsertLocal(toSave);
+      }
 
-    if (token) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15_000);
@@ -134,17 +145,15 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
           const list = data.posts ?? [];
           const saved = list.find((p) => p.id === toSave.id);
           if (saved) {
-            const restAfter = get().userPosts.filter((p) => p.id !== saved.id);
-            const merged = [saved, ...restAfter];
-            set({ userPosts: merged });
-            persistToDisk(merged);
+            upsertLocal(saved);
           }
         }
       } catch {
         /* offline */
       }
+
       void useFeedCatalogStore.getState().hydrate();
-    }
+    })();
   },
 
   removeUserPost: (id) => {
