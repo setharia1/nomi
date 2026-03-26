@@ -1,5 +1,11 @@
 import { ApiError, GenerateVideosOperation, GoogleGenAI } from "@google/genai";
 
+/**
+ * Google AI for Nomi runs only in Route Handlers (`/api/*`). One
+ * `GOOGLE_GENERATIVE_AI_API_KEY` on the server backs every visitor’s generation — never
+ * `NEXT_PUBLIC_*`. Set the same variable on your host (Vercel, etc.) for production, not only in
+ * `.env.local`.
+ */
 export function formatGenAiError(err: unknown): string {
   if (err instanceof ApiError) {
     const s = err.status;

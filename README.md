@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## AI generation (Gemini / Veo)
+
+Video and text generation go through **server** routes (`/api/gemini`, `/api/video/*`). The value in `GOOGLE_GENERATIVE_AI_API_KEY` is used for **every visitor**; there is no per-user key in the browser. Copy [.env.example](.env.example) to `.env.local` for local dev, and add the same variables to your hosting provider’s **environment** (e.g. Vercel → Settings → Environment Variables) for production so people other than you can generate. Do not use a `NEXT_PUBLIC_` prefix on the API key.
+
 ## Getting Started
 
 First, run the development server:
