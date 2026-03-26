@@ -35,6 +35,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Environment variables (project → Settings → Environment Variables)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Add these for **Production** (and **Preview** if you want previews to generate / share data):
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | **Yes** | Gemini + Veo from [Google AI Studio](https://aistudio.google.com/apikey). Same as local `.env.local` — server-only, never `NEXT_PUBLIC_`. |
+| `UPSTASH_REDIS_REST_URL` | Strongly recommended | Account data, posts, sessions, follows persist across serverless instances and cold starts. Without Redis, the app uses in-memory storage on Vercel (data resets). |
+| `UPSTASH_REDIS_REST_TOKEN` | Strongly recommended | Paired with the URL above ([Upstash](https://upstash.com/) → create Redis → REST API). |
+
+Optional (see [.env.example](.env.example)): `GEMINI_MODEL`, `VEO_MODEL`, `VEO_GENERATE_AUDIO`, `VEO_VIDEO_DURATION_SECONDS`, `VEO_VIDEO_RESOLUTION`, `VEO_VIDEO_COMPRESSION`.
+
+After changing variables, trigger a **redeploy** (Deployments → ⋮ → Redeploy) so new values load.
+
+The easiest way to deploy is the [Vercel](https://vercel.com/new) import from GitHub flow. See [Next.js on Vercel](https://nextjs.org/docs/app/building-your-application/deploying) for more.
