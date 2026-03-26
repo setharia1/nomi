@@ -174,8 +174,10 @@ export async function ensurePostReachableMedia(
   if (postNeedsPublicMediaUpload(next)) {
     try {
       next = await ensurePostMediaPublicUrls(next, accountId, bearerToken);
-    } catch {
-      /* e.g. BLOB_READ_WRITE_TOKEN missing */
+    } catch (e) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn("[nomi] Client Blob upload failed; falling back to inline data if small enough.", e);
+      }
     }
   }
   if (postNeedsPublicMediaUpload(next)) {

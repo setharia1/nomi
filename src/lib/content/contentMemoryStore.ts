@@ -6,6 +6,7 @@ import type { PostDraft } from "@/lib/create/types";
 import { posts as seedPosts } from "@/lib/mock-data";
 import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { useAuthStore } from "@/lib/auth/authStore";
+import { shrinkPostDataUrlsForSafeJsonBody } from "@/lib/media/compressImageDataUrl";
 import { ensurePostReachableMedia } from "@/lib/media/blobClientUpload";
 
 const KEY = "nomi-user-posts-v1";
@@ -82,7 +83,26 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
 
     let toSave = stamped;
     if (token && account?.id) {
-      toSave = await ensurePostReachableMedia(stamped, account.id, token);
+      const MEDIA_MS = 95_000;
+      let mediaTimeoutId: ReturnType<typeof setTimeout> | undefined;
+      const mediaTimeout = new Promise<never>((_, rej) => {
+        mediaTimeoutId = setTimeout(
+          () => rej(new Error("Media processing timed out — try a smaller image or check Blob settings.")),
+          MEDIA_MS,
+        );
+      });
+      try {
+        toSave = await Promise.race([
+          ensurePostReachableMedia(stamped, account.id, token),
+          mediaTimeout,
+        ]);
+      } finally {
+        if (mediaTimeoutId !== undefined) clearTimeout(mediaTimeoutId);
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      toSave = await shrinkPostDataUrlsForSafeJsonBody(toSave);
     }
 
     const rest = get().userPosts.filter((p) => p.id !== toSave.id);
@@ -91,6 +111,8 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
     persistToDisk(nextLocal);
 
     if (token) {
+      const ac = new AbortController();
+      const to = setTimeout(() => ac.abort(), 120_000);
       try {
         const res = await fetch("/api/nomi/posts", {
           method: "POST",
@@ -99,20 +121,34 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
             "Content-Type": "application/json",
           },
           body: JSON.stringify(toSave),
+          signal: ac.signal,
         });
-        if (res.ok) {
-          const data = (await res.json()) as { posts?: Post[] };
-          const list = data.posts ?? [];
-          const saved = list.find((p) => p.id === toSave.id);
-          if (saved) {
-            const restAfter = get().userPosts.filter((p) => p.id !== saved.id);
-            const merged = [saved, ...restAfter];
-            set({ userPosts: merged });
-            persistToDisk(merged);
+        if (!res.ok) {
+          let msg = `Couldn’t save post (${res.status})`;
+          try {
+            const j = (await res.json()) as { error?: unknown };
+            if (typeof j.error === "string") msg = j.error;
+          } catch {
+            /* */
           }
+          throw new Error(msg);
         }
-      } catch {
-        /* offline */
+        const data = (await res.json()) as { posts?: Post[] };
+        const list = data.posts ?? [];
+        const saved = list.find((p) => p.id === toSave.id);
+        if (saved) {
+          const restAfter = get().userPosts.filter((p) => p.id !== saved.id);
+          const merged = [saved, ...restAfter];
+          set({ userPosts: merged });
+          persistToDisk(merged);
+        }
+      } catch (e) {
+        if (e instanceof Error && (e.name === "AbortError" || /aborted/i.test(e.message))) {
+          throw new Error("Publish timed out — connection or image too large for the server.");
+        }
+        throw e;
+      } finally {
+        clearTimeout(to);
       }
       void useFeedCatalogStore.getState().hydrate();
     }

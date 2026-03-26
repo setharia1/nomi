@@ -18,9 +18,10 @@ import {
   loadDrafts,
 } from "@/lib/create/drafts";
 import { useDraftsStore } from "@/lib/create/draftsStore";
-import { requireMeId } from "@/lib/auth/meId";
+import { getMeId } from "@/lib/auth/meId";
 import { buildPostFromDraft, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
 import { captureVideoPosterDataUrl } from "@/lib/media/videoPoster";
+import { compressImageDataUrlIfLarge } from "@/lib/media/compressImageDataUrl";
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -60,9 +61,11 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
   const [sessionMime, setSessionMime] = useState<string | null>(() => loaded?.mediaMime ?? null);
   const [sessionFile, setSessionFile] = useState<File | null>(null);
   const [draftCount, setDraftCount] = useState(() => loadDrafts().length);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const resetFlow = useCallback(() => {
     if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
+    setPublishError(null);
     setPhase("chooser");
     setPath(null);
     setDraft(defaultDraft());
@@ -125,25 +128,43 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
   }, [draft, path, phase, sessionFile, sessionMime]);
 
   const runPublish = useCallback(async () => {
-    setPhase("publishing");
-    await new Promise((r) => setTimeout(r, 1300));
-    let posterDataUrl: string | null = null;
-    if (draft.mediaType === "video" && sessionMediaUrl) {
-      posterDataUrl = await captureVideoPosterDataUrl(sessionMediaUrl);
+    setPublishError(null);
+    const me = getMeId();
+    if (!me) {
+      setPublishError("You need to be signed in to post. Open Log in from the menu and try again.");
+      return;
     }
-    const published = buildPostFromDraft({
-      draft,
-      mediaUrl: sessionMediaUrl,
-      creatorId: requireMeId(),
-      posterDataUrl,
-    });
-    await useContentMemoryStore.getState().publishPost(published);
-    if (draftId) deleteDraft(draftId);
-    if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
-    setSessionMediaUrl(null);
-    setSessionFile(null);
-    setDraftCount(loadDrafts().length);
-    setPhase("success");
+
+    setPhase("publishing");
+    try {
+      let posterDataUrl: string | null = null;
+      if (draft.mediaType === "video" && sessionMediaUrl) {
+        posterDataUrl = await captureVideoPosterDataUrl(sessionMediaUrl);
+      }
+
+      let mediaUrl = sessionMediaUrl;
+      if (draft.mediaType === "image" && mediaUrl?.startsWith("data:image/")) {
+        mediaUrl = await compressImageDataUrlIfLarge(mediaUrl);
+      }
+
+      const published = buildPostFromDraft({
+        draft,
+        mediaUrl,
+        creatorId: me,
+        posterDataUrl,
+      });
+      await useContentMemoryStore.getState().publishPost(published);
+      if (draftId) deleteDraft(draftId);
+      if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
+      setSessionMediaUrl(null);
+      setSessionFile(null);
+      setDraftCount(loadDrafts().length);
+      setPhase("success");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Couldn’t publish — try again.";
+      setPublishError(msg);
+      setPhase("preview");
+    }
   }, [draft, draftId, sessionMediaUrl]);
 
   const transition = {
@@ -200,7 +221,15 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
         ) : null}
 
         {phase === "preview" && path ? (
-          <motion.div key="preview" {...transition}>
+          <motion.div key="preview" {...transition} className="space-y-4">
+            {publishError ? (
+              <p
+                role="alert"
+                className="rounded-xl border border-rose-400/35 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
+              >
+                {publishError}
+              </p>
+            ) : null}
             <StudioPreview
               draft={draft}
               mediaUrl={sessionMediaUrl}
