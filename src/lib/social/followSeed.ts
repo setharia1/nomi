@@ -1,7 +1,9 @@
 /**
  * Initial follow graph: `followingByUserId[userId]` = creator ids that user follows.
- * Empty by default — follows only appear after real in-app follow actions.
+ * One row per seeded creator so normalization stays consistent.
  */
 export const INITIAL_FOLLOWING_BY_USER: Record<string, string[]> = {
   c1: [],
+  c2: [],
+  c3: [],
 };

@@ -6,8 +6,8 @@ import type { FeedTab } from "@/lib/types";
 import { FeedTabBar } from "./FeedTabBar";
 import { ImmersivePostSlide } from "./ImmersivePostSlide";
 import {
-  selectPostsForFeedTabMerged,
-  selectPostsForFeedTabSeed,
+  selectHomeFeedPostsSeed,
+  selectHomeFeedPostsShuffled,
   useContentMemoryStore,
 } from "@/lib/content/contentMemoryStore";
 import { useFeedPlaybackStore } from "@/lib/media/feedPlaybackStore";
@@ -20,6 +20,8 @@ export function HomeImmersiveFeed() {
   const userPosts = useContentMemoryStore((s) => s.userPosts);
   /** Avoid hydration mismatch: SSR has no local user posts until after mount. */
   const [feedMergedSynced, setFeedMergedSynced] = useState(false);
+  /** Bumps when tab changes so the home order re-shuffles (new random sequence). */
+  const [shuffleGen, setShuffleGen] = useState(0);
 
   useEffect(() => {
     hydrate();
@@ -27,10 +29,14 @@ export function HomeImmersiveFeed() {
     setFeedMergedSynced(true);
   }, [hydrate]);
 
-  const list = useMemo(
-    () => (feedMergedSynced ? selectPostsForFeedTabMerged(tab) : selectPostsForFeedTabSeed(tab)),
-    [tab, userPosts, feedMergedSynced],
-  );
+  useEffect(() => {
+    setShuffleGen((g) => g + 1);
+  }, [tab, feedMergedSynced]);
+
+  const list = useMemo(() => {
+    if (!feedMergedSynced) return selectHomeFeedPostsSeed(tab);
+    return selectHomeFeedPostsShuffled(tab, shuffleGen);
+  }, [tab, userPosts, feedMergedSynced, shuffleGen]);
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col w-full">
@@ -70,20 +76,21 @@ export function HomeImmersiveFeed() {
                     aria-hidden
                   />
                   <p className="relative font-[family-name:var(--font-syne)] text-xl font-bold text-white sm:text-2xl">
-                    Your feed is ready for real work
+                    Waiting on the network
                   </p>
                   <p className="relative mt-3 text-sm leading-relaxed text-white/48">
-                    Publish a video or image to this tab, or follow creators as they join — nothing here is simulated.
+                    Your home feed only shows other creators — nothing from your account. When more people publish in
+                    this tab, new drops will appear here in a fresh random order.
                   </p>
                   <div className="relative mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
-                    <Link href="/create" className="sm:min-w-[11rem]">
+                    <Link href="/explore" className="sm:min-w-[11rem]">
                       <GlowButton type="button" className="w-full justify-center">
-                        Create a post
+                        Explore creators
                       </GlowButton>
                     </Link>
-                    <Link href="/explore" className="sm:min-w-[11rem]">
+                    <Link href={`/profile/${encodeURIComponent("you")}`} className="sm:min-w-[11rem]">
                       <GlowButton type="button" variant="ghost" className="w-full justify-center border-white/12">
-                        Explore
+                        Your profile
                       </GlowButton>
                     </Link>
                   </div>
