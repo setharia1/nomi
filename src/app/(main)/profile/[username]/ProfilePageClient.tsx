@@ -23,10 +23,17 @@ export function ProfilePageClient() {
     return () => window.removeEventListener("nomi-self-profile-changed", onProfile);
   }, []);
 
+  /** Re-resolve when the account registry changes (e.g. after /api/nomi/accounts merges). */
+  const registryKey = useAccountRegistryStore((s) =>
+    Object.keys(s.byId)
+      .sort()
+      .join(","),
+  );
+
   const localCreator = useMemo(() => {
     if (typeof window === "undefined") return null;
     return resolveProfileCreator(username);
-  }, [username, profileEpoch]);
+  }, [username, profileEpoch, registryKey]);
 
   const [remoteCreator, setRemoteCreator] = useState<Creator | null>(null);
   const [fetchDone, setFetchDone] = useState(false);

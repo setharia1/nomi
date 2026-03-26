@@ -15,11 +15,18 @@ export const useAccountRegistryStore = create<State>()((set, get) => ({
   byId: {},
   hydrated: false,
 
+  /**
+   * Merges server directory into the registry — never replace wholesale.
+   * An empty API response on production (e.g. fresh Redis) must not wipe the account
+   * we just upserted during `setSession`, or `/profile/[username]` breaks for the signed-in user.
+   */
   setFromServer: (creators) => {
-    const byId: Record<string, Creator> = {};
-    for (const c of creators) byId[c.id] = c;
-    registerKnownCreatorIds(creators.map((c) => c.id));
-    set({ byId, hydrated: true });
+    set((state) => {
+      const byId = { ...state.byId };
+      for (const c of creators) byId[c.id] = c;
+      registerKnownCreatorIds(creators.map((c) => c.id));
+      return { byId, hydrated: true };
+    });
   },
 
   upsert: (c) => {
