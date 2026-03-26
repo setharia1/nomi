@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Syne } from "next/font/google";
 import "./globals.css";
+import { NomiRuntimeInit } from "@/components/auth/NomiRuntimeInit";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -37,7 +38,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`dark ${dmSans.variable} ${syne.variable}`}>
-      <body className="min-h-dvh antialiased font-sans">{children}</body>
+      <body className="min-h-dvh antialiased font-sans">
+        <NomiRuntimeInit>{children}</NomiRuntimeInit>
+      </body>
     </html>
   );
 }

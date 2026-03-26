@@ -6,6 +6,9 @@ import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileTabs } from "./ProfileTabs";
 import { getMoodBoardsForCreator } from "@/lib/mock-data";
 import { isSelfProfileSlug, resolveProfileCreator } from "@/lib/profile/meCreator";
+import { useAccountRegistryStore } from "@/lib/accounts/registryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
+import type { Creator, Post } from "@/lib/types";
 
 export function ProfilePageClient() {
   const params = useParams();
@@ -19,10 +22,52 @@ export function ProfilePageClient() {
     return () => window.removeEventListener("nomi-self-profile-changed", onProfile);
   }, []);
 
-  const creator = useMemo(
-    () => resolveProfileCreator(username),
-    [username, profileEpoch],
-  );
+  const localCreator = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return resolveProfileCreator(username);
+  }, [username, profileEpoch]);
+
+  const [remoteCreator, setRemoteCreator] = useState<Creator | null>(null);
+  const [fetchDone, setFetchDone] = useState(false);
+
+  useEffect(() => {
+    if (localCreator) {
+      setRemoteCreator(null);
+      setFetchDone(true);
+      return;
+    }
+    let cancelled = false;
+    setFetchDone(false);
+    setRemoteCreator(null);
+    (async () => {
+      const r = await fetch(`/api/nomi/accounts/by-username/${encodeURIComponent(username)}`);
+      if (cancelled) return;
+      if (!r.ok) {
+        setRemoteCreator(null);
+        setFetchDone(true);
+        return;
+      }
+      const data = (await r.json()) as { creator: Creator; posts?: Post[] };
+      useAccountRegistryStore.getState().upsert(data.creator);
+      const posts = data.posts ?? [];
+      if (posts.length) useFeedCatalogStore.getState().mergePosts(posts);
+      setRemoteCreator(data.creator);
+      setFetchDone(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [username, profileEpoch, localCreator]);
+
+  const creator = localCreator ?? remoteCreator;
+
+  if (!fetchDone) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-white/50">
+        Loading profile…
+      </div>
+    );
+  }
 
   if (!creator) {
     notFound();

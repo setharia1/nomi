@@ -11,7 +11,8 @@ import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 import type { Creator } from "@/lib/types";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { listFollowerIds } from "@/lib/social/followGraph";
-import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 
 type Tab = "followers" | "following";
 
@@ -35,6 +36,7 @@ export function RelationshipListSheet({
   initialTab: Tab;
   onClose: () => void;
 }) {
+  const meId = useMeId();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
 
@@ -126,10 +128,11 @@ export function RelationshipListSheet({
 
         <ul className="flex-1 overflow-y-auto overscroll-contain px-2 py-2">
             {rows.map((c) => {
-              const iFollow = (followingByUserId[ME_ID] ?? []).includes(c.id);
-              const theyFollowMe = (followingByUserId[c.id] ?? []).includes(ME_ID);
-              const showMutual = iFollow && theyFollowMe && c.id !== ME_ID;
-              const followsYou = theyFollowMe && subjectCreatorId === ME_ID && c.id !== ME_ID;
+              const iFollow = (followingByUserId[meId ?? ""] ?? []).includes(c.id);
+              const theyFollowMe = meId != null && (followingByUserId[c.id] ?? []).includes(meId);
+              const showMutual = iFollow && theyFollowMe && meId != null && c.id !== meId;
+              const followsYou =
+                theyFollowMe && meId != null && subjectCreatorId === meId && c.id !== meId;
 
               return (
                 <li
@@ -165,7 +168,7 @@ export function RelationshipListSheet({
                         ) : null}
                       </div>
                     </Link>
-                    {c.id !== ME_ID ? (
+                    {meId != null && c.id !== meId ? (
                       <GlowButton
                         type="button"
                         variant={iFollow ? "primary" : "ghost"}

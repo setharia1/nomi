@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local Nomi dev DB (file fallback)
+/data/nomi-cloud.json

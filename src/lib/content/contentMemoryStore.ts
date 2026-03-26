@@ -4,7 +4,8 @@ import { create } from "zustand";
 import type { FeedTab, Post } from "@/lib/types";
 import type { PostDraft } from "@/lib/create/types";
 import { posts as seedPosts } from "@/lib/mock-data";
-import { ME_CREATOR_ID } from "@/lib/profile/meCreator";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
+import { useAuthStore } from "@/lib/auth/authStore";
 
 const KEY = "nomi-user-posts-v1";
 
@@ -37,13 +38,20 @@ function persistToDisk(next: Post[]) {
   }
 }
 
+function mergeAll(seed: Post[], network: Post[], user: Post[]): Post[] {
+  const byId = new Map<string, Post>();
+  for (const p of seed) byId.set(p.id, p);
+  for (const p of network) byId.set(p.id, p);
+  for (const p of user) byId.set(p.id, p);
+  return Array.from(byId.values());
+}
+
 type ContentMemoryState = {
   hydrated: boolean;
   userPosts: Post[];
   hydrate: () => void;
   publishPost: (post: Post) => void;
   removeUserPost: (id: string) => void;
-  /** Seed-first merge: user posts override same id, then seed */
   mergeWithSeed: (seed: Post[]) => Post[];
 };
 
@@ -62,6 +70,20 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
     const next = [stamped, ...rest];
     set({ userPosts: next });
     persistToDisk(next);
+
+    const token = useAuthStore.getState().token;
+    if (token) {
+      void fetch("/api/nomi/posts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(stamped),
+      })
+        .then(() => useFeedCatalogStore.getState().hydrate())
+        .catch(() => {});
+    }
   },
 
   removeUserPost: (id) => {
@@ -72,10 +94,8 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
 
   mergeWithSeed: (seed) => {
     const u = get().userPosts;
-    const byId = new Map<string, Post>();
-    for (const p of seed) byId.set(p.id, p);
-    for (const p of u) byId.set(p.id, p);
-    return Array.from(byId.values());
+    const net = useFeedCatalogStore.getState().posts;
+    return mergeAll(seed, net, u);
   },
 }));
 
@@ -87,7 +107,6 @@ export function selectAllPostsMerged(): Post[] {
   return useContentMemoryStore.getState().mergeWithSeed(seedPosts);
 }
 
-/** Newest first — uses `publishedAt`, then user-post order, then id. */
 export function sortPostsForProfileGrid(posts: Post[]): Post[] {
   const user = useContentMemoryStore.getState().userPosts;
   const idx = new Map(user.map((p, i) => [p.id, i]));
@@ -107,6 +126,8 @@ export function sortPostsForProfileGrid(posts: Post[]): Post[] {
 export function selectPostByIdMerged(id: string): Post | undefined {
   const fromUser = useContentMemoryStore.getState().userPosts.find((p) => p.id === id);
   if (fromUser) return fromUser;
+  const fromNet = useFeedCatalogStore.getState().posts.find((p) => p.id === id);
+  if (fromNet) return fromNet;
   return seedPosts.find((p) => p.id === id);
 }
 
@@ -114,12 +135,10 @@ export function selectPostsForCreatorMerged(creatorId: string): Post[] {
   return sortPostsForProfileGrid(selectAllPostsMerged().filter((p) => p.creatorId === creatorId));
 }
 
-/** Seed/mock posts only — matches server SSR and first client paint before local storage hydrates. */
 export function selectPostsForCreatorSeed(creatorId: string): Post[] {
   return seedPosts.filter((p) => p.creatorId === creatorId);
 }
 
-/** Seed-only feed tab ordering (empty without demo posts). Explore may still sort merged catalog. */
 export function selectPostsForFeedTabSeed(tab: FeedTab): Post[] {
   return seedPosts
     .filter((p) => p.feedTab === tab)
@@ -127,23 +146,14 @@ export function selectPostsForFeedTabSeed(tab: FeedTab): Post[] {
     .sort((a, b) => b.likes - a.likes);
 }
 
-/** Pre-hydration / SSR: seed catalog has no posts — matches first client paint before local storage loads. */
 export function selectHomeFeedPostsSeed(_tab: FeedTab): Post[] {
   return [];
 }
 
-/**
- * Home (see `HomeImmersiveFeed`):
- * - **For you** — `selectForYouPoolMerged` → every real published post in this tab (you + everyone else),
- *   then `buildForYouStream` (ranked + light randomness so new uploads mix into the stream).
- * - **Following** — `selectFollowingPoolMerged` → only followed creator ids in this tab,
- *   then `sortFollowingFeed` (newest first).
- */
 export function selectForYouPoolMerged(tab: FeedTab): Post[] {
   return selectAllPostsMerged().filter((p) => p.feedTab === tab);
 }
 
-/** Following: posts only from accounts the user follows in this tab. */
 export function selectFollowingPoolMerged(tab: FeedTab, followingCreatorIds: string[]): Post[] {
   const allow = new Set(followingCreatorIds);
   return selectAllPostsMerged().filter((p) => p.feedTab === tab && allow.has(p.creatorId));
@@ -169,7 +179,6 @@ export function selectPostsForFeedTabMerged(tab: FeedTab): Post[] {
 const FALLBACK_POSTER =
   "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80";
 
-/** Build a published post from a finished Veo job (client-only). */
 export function buildUserPostFromVideoJob(input: {
   id: string;
   creatorId: string;
@@ -181,7 +190,6 @@ export function buildUserPostFromVideoJob(input: {
   processNotes: string;
   modelLabel: string;
   feedTab: FeedTab;
-  /** First-frame JPEG data URL from the video — profile grid + post posters */
   posterDataUrl?: string | null;
 }): Post {
   const tags = input.tagsLine
@@ -224,12 +232,10 @@ export function buildUserPostFromVideoJob(input: {
   };
 }
 
-/** Publish from Create Studio — always scoped to `creatorId` (your account). */
 export function buildPostFromDraft(input: {
   draft: PostDraft;
   mediaUrl: string | null;
   creatorId: string;
-  /** First-frame JPEG data URL when publishing video — used as profile thumbnail */
   posterDataUrl?: string | null;
 }): Post {
   const { draft, mediaUrl, creatorId } = input;

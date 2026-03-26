@@ -17,8 +17,11 @@ import { getAutocompleteSuggestions, type SearchSuggestion } from "@/lib/search/
 import { parseSearchTab, SEARCH_TAB_LABELS, SEARCH_TAB_ORDER } from "@/lib/search/tabs";
 import type { SearchTab } from "@/lib/search/types";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
-import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
+import type { Creator } from "@/lib/types";
 import { creators, posts as seedPosts } from "@/lib/mock-data";
+import { useAccountRegistryStore } from "@/lib/accounts/registryStore";
 import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
 import { cn } from "@/lib/cn";
 import { CreatorSearchRow } from "./creator-search-row";
@@ -52,6 +55,7 @@ export function SearchExperience() {
   const searchParams = useSearchParams();
   const qCommitted = searchParams.get("q") ?? "";
   const tab = parseSearchTab(searchParams.get("tab"));
+  const meId = useMeId();
 
   const hydrated = useInteractionsStore((s) => s.hydrated);
   const followingByUserId = useInteractionsStore((s) => s.followingByUserId);
@@ -59,13 +63,17 @@ export function SearchExperience() {
   const savedPostIds = useInteractionsStore((s) => s.savedPostIds);
   const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const registryById = useAccountRegistryStore((s) => s.byId);
 
   const searchCatalog = useMemo(() => {
     const merged = useContentMemoryStore.getState().mergeWithSeed(seedPosts);
-    return { posts: merged, creators };
-  }, [userPosts]);
+    const byId = new Map<string, Creator>();
+    for (const c of creators) byId.set(c.id, c);
+    for (const c of Object.values(registryById)) byId.set(c.id, c);
+    return { posts: merged, creators: Array.from(byId.values()) };
+  }, [userPosts, registryById]);
 
-  const meFollowingSlice = followingByUserId[ME_ID];
+  const meFollowingSlice = followingByUserId[meId ?? ""];
   const meFollowing = useMemo(() => meFollowingSlice ?? [], [meFollowingSlice]);
   const followerCounts = useMemo(() => computeFollowerCounts(followingByUserId), [followingByUserId]);
 
@@ -81,6 +89,21 @@ export function SearchExperience() {
   useEffect(() => {
     setInput(qCommitted);
   }, [qCommitted]);
+
+  useEffect(() => {
+    const q = input.trim().toLowerCase();
+    if (q.length < 1) return;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        const r = await fetch(`/api/nomi/accounts/search?q=${encodeURIComponent(q)}`);
+        if (!r.ok) return;
+        const data = (await r.json()) as { creators: Creator[] };
+        const upsert = useAccountRegistryStore.getState().upsert;
+        for (const c of data.creators ?? []) upsert(c);
+      })();
+    }, 220);
+    return () => window.clearTimeout(t);
+  }, [input]);
 
   const sig = useMemo(
     () =>

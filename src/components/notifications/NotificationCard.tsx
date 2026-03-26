@@ -6,7 +6,8 @@ import { motion } from "framer-motion";
 import type { NotificationItem } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { Heart, MessageCircle, Sparkles, UserPlus, AtSign, Clapperboard } from "lucide-react";
-import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 
 const icon = {
@@ -19,9 +20,10 @@ const icon = {
 };
 
 export function NotificationCard({ n }: { n: NotificationItem }) {
+  const meId = useMeId();
   const Icon = icon[n.type];
   const actor =
-    n.actor.id === ME_ID ? getCreatorByIdResolved(ME_ID) ?? n.actor : n.actor;
+    meId != null && n.actor.id === meId ? getCreatorByIdResolved(meId) ?? n.actor : n.actor;
   const href =
     n.type === "generation_ready" && n.generationJobId
       ? `/create/ready/${encodeURIComponent(n.generationJobId)}`

@@ -14,7 +14,9 @@ import { motion } from "framer-motion";
 import { GlowButton } from "@/components/ui/GlowButton";
 import type { PostDraft } from "@/lib/create/types";
 import { feedTabLabels } from "@/lib/mock-data";
-import { getCreatorByIdResolved, ME_CREATOR_ID } from "@/lib/profile/meCreator";
+import { useMeId } from "@/lib/auth/meId";
+import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
+import { creators } from "@/lib/mock-data";
 import { isDataUrlAvatar } from "@/lib/profile/avatarUpload";
 import { cn } from "@/lib/cn";
 
@@ -31,7 +33,8 @@ export function StudioPreview({
   onPublish: () => void;
   onSaveDraft: () => void;
 }) {
-  const me = getCreatorByIdResolved(ME_CREATOR_ID)!;
+  const meId = useMeId();
+  const me = (meId ? getCreatorByIdResolved(meId) : undefined) ?? creators[0]!;
   const tags = draft.tags
     .split(",")
     .map((t) => t.trim())

@@ -9,10 +9,12 @@ import { posts as seedPosts } from "@/lib/mock-data";
 import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
 import { buildForYouStream } from "@/lib/feed/forYouRanking";
 import { buildPersonalizationSignals } from "@/lib/search/engine";
-import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
 
 export function ForYouRail() {
+  const meId = useMeId();
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
 
@@ -22,7 +24,7 @@ export function ForYouRail() {
   const savedPostIds = useInteractionsStore((s) => s.savedPostIds);
   const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
 
-  const meFollowing = followingByUserId[ME_ID] ?? [];
+  const meFollowing = followingByUserId[meId ?? ""] ?? [];
   const followerCounts = useMemo(() => computeFollowerCounts(followingByUserId), [followingByUserId]);
 
   useEffect(() => {

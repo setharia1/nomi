@@ -15,13 +15,15 @@ import {
 import { useFeedPlaybackStore } from "@/lib/media/feedPlaybackStore";
 import Link from "next/link";
 import { GlowButton } from "@/components/ui/GlowButton";
-import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
 import { buildPersonalizationSignals } from "@/lib/search/engine";
 import { feedTabLabels, posts as seedPosts } from "@/lib/mock-data";
 import { buildForYouStream, sortFollowingFeed } from "@/lib/feed/forYouRanking";
 
 export function HomeImmersiveFeed() {
+  const meId = useMeId();
   const [scope, setScope] = useState<FeedScope>("for-you");
   const [tab, setTab] = useState<FeedTab>("ai-videos");
   const hydrate = useContentMemoryStore((s) => s.hydrate);
@@ -36,7 +38,7 @@ export function HomeImmersiveFeed() {
   const savedPostIds = useInteractionsStore((s) => s.savedPostIds);
   const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
 
-  const meFollowing = followingByUserId[ME_ID] ?? [];
+  const meFollowing = followingByUserId[meId ?? ""] ?? [];
   const followerCounts = useMemo(() => computeFollowerCounts(followingByUserId), [followingByUserId]);
 
   const mergedPosts = useMemo(

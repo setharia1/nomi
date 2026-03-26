@@ -9,7 +9,8 @@ import { ModalBackdrop } from "@/components/ui/ModalBackdrop";
 import { GlowButton } from "@/components/ui/GlowButton";
 import type { Post } from "@/lib/types";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
-import { EMPTY_COMMENTS, ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { EMPTY_COMMENTS, useInteractionsStore } from "@/lib/interactions/store";
 
 export function CommentDrawer({
   post,
@@ -20,11 +21,15 @@ export function CommentDrawer({
   open: boolean;
   onClose: () => void;
 }) {
+  const meId = useMeId();
   /** Read `commentsByPostId` directly — `getComments` uses `get()` and breaks useSyncExternalStore snapshot stability in selectors. */
   const comments = useInteractionsStore((s) =>
     post?.id ? (s.commentsByPostId[post.id] ?? EMPTY_COMMENTS) : EMPTY_COMMENTS,
   );
-  const myCommentCount = useMemo(() => comments.filter((c) => c.userId === ME_ID).length, [comments]);
+  const myCommentCount = useMemo(
+    () => comments.filter((c) => meId != null && c.userId === meId).length,
+    [comments, meId],
+  );
 
   const addComment = useInteractionsStore((s) => s.addComment);
   const [text, setText] = useState("");

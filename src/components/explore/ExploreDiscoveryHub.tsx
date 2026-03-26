@@ -6,16 +6,21 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { Compass, Sparkles } from "lucide-react";
 import { buildPersonalizationSignals, buildTopicHits } from "@/lib/search/engine";
+import type { Creator } from "@/lib/types";
 import { creators, posts as seedPosts } from "@/lib/mock-data";
+import { useAccountRegistryStore } from "@/lib/accounts/registryStore";
 import { useContentMemoryStore, sortPostsForProfileGrid } from "@/lib/content/contentMemoryStore";
-import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
 import { CURATED_TOPIC_SLUGS } from "@/lib/search/constants";
 import { buildForYouStream } from "@/lib/feed/forYouRanking";
 
 export function ExploreDiscoveryHub() {
+  const meId = useMeId();
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const registryById = useAccountRegistryStore((s) => s.byId);
 
   const hydrated = useInteractionsStore((s) => s.hydrated);
   const followingByUserId = useInteractionsStore((s) => s.followingByUserId);
@@ -29,10 +34,13 @@ export function ExploreDiscoveryHub() {
 
   const catalog = useMemo(() => {
     const merged = useContentMemoryStore.getState().mergeWithSeed(seedPosts);
-    return { posts: merged, creators };
-  }, [userPosts]);
+    const byId = new Map<string, Creator>();
+    for (const c of creators) byId.set(c.id, c);
+    for (const c of Object.values(registryById)) byId.set(c.id, c);
+    return { posts: merged, creators: Array.from(byId.values()) };
+  }, [userPosts, registryById]);
 
-  const meFollowing = followingByUserId[ME_ID] ?? [];
+  const meFollowing = followingByUserId[meId ?? ""] ?? [];
 
   const sig = useMemo(
     () =>

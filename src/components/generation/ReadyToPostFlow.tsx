@@ -13,7 +13,7 @@ import {
 } from "@/lib/content/contentMemoryStore";
 import { captureVideoPosterDataUrl } from "@/lib/media/videoPoster";
 import { useDraftsStore } from "@/lib/create/draftsStore";
-import { ME_ID } from "@/lib/interactions/store";
+import { requireMeId } from "@/lib/auth/meId";
 import { cn } from "@/lib/cn";
 
 export function ReadyToPostFlow({ jobId }: { jobId: string }) {
@@ -50,7 +50,7 @@ export function ReadyToPostFlow({ jobId }: { jobId: string }) {
     const posterDataUrl = await captureVideoPosterDataUrl(job.resultVideoDataUrl);
     const post = buildUserPostFromVideoJob({
       id: postId,
-      creatorId: ME_ID,
+      creatorId: requireMeId(),
       videoDataUrl: job.resultVideoDataUrl,
       caption: job.finishCaption,
       tagsLine: job.finishTags,

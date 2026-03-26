@@ -7,7 +7,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Clapperboard, Sparkles, X } from "lucide-react";
 import { useVideoJobsStore, blobToDataUrl } from "@/lib/generation/videoJobsStore";
 import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
-import { useInteractionsStore, ME_ID } from "@/lib/interactions/store";
+import { getMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 import { cn } from "@/lib/cn";
 
@@ -128,7 +129,8 @@ export function VideoGenerationExperience() {
             const dataUrl = await blobToDataUrl(blob);
             completeJobWithVideo(fresh.id, dataUrl);
 
-            const me = getCreatorByIdResolved(ME_ID);
+            const meId = getMeId();
+            const me = meId ? getCreatorByIdResolved(meId) : undefined;
             const already = useInteractionsStore
               .getState()
               .notifications.some(

@@ -6,7 +6,8 @@ import { motion } from "framer-motion";
 import { CreatorBadge } from "@/components/badges/CreatorBadge";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { cn } from "@/lib/cn";
-import { useInteractionsStore, ME_ID } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { useHydrationSafeCreator } from "@/lib/profile/useHydrationSafeCreator";
 import type { Creator } from "@/lib/types";
 
@@ -27,6 +28,7 @@ export function CreatorSearchRow({
   previewTags?: string[];
   className?: string;
 }) {
+  const meId = useMeId();
   const displayCreator = useHydrationSafeCreator(creator);
   const isFollowing = useInteractionsStore((s) => s.isFollowing(creator.id));
   const toggleFollow = useInteractionsStore((s) => s.toggleFollow);
@@ -87,7 +89,7 @@ export function CreatorSearchRow({
             </div>
           ) : null}
         </div>
-        {creator.id !== ME_ID ? (
+        {creator.id !== meId ? (
           <GlowButton
             type="button"
             variant={isFollowing ? "primary" : "ghost"}

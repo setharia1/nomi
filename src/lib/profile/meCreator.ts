@@ -1,12 +1,11 @@
 import type { Creator } from "@/lib/types";
-import { creators, getCreatorById } from "@/lib/mock-data";
+import { resolveCreator, resolveCreatorByUsername } from "@/lib/accounts/resolveCreator";
+import { getMeId } from "@/lib/auth/meId";
 import { getSelfProfileOverrides } from "./selfProfileStorage";
 
-/** Stable ID for the signed-in account (seed “me”); all user-made posts use this. */
-export const ME_CREATOR_ID = creators[0]!.id;
-
 export function mergeSelfProfileIntoCreator(creator: Creator): Creator {
-  if (creator.id !== ME_CREATOR_ID) return creator;
+  const me = getMeId();
+  if (!me || creator.id !== me) return creator;
   const o = getSelfProfileOverrides();
   if (!o) return creator;
   const next = { ...creator };
@@ -21,29 +20,33 @@ export function mergeSelfProfileIntoCreator(creator: Creator): Creator {
   return next;
 }
 
-/** Use for any UI that shows a creator — applies live profile overrides for “me”. */
+/** Use for any UI that shows a creator — applies live profile overrides for the signed-in account. */
 export function getCreatorByIdResolved(id: string): Creator | undefined {
-  const c = getCreatorById(id);
+  const c = resolveCreator(id);
   return c ? mergeSelfProfileIntoCreator(c) : undefined;
 }
 
 /**
- * Resolve profile route slug to a seed creator. Supports overridden handle for the current account
- * (client reads localStorage; SSR falls back to seed usernames only).
+ * Resolve profile route slug to a creator. Uses the live registry first, then optional local handle
+ * overrides for the current account.
  */
 export function resolveProfileCreator(usernameFromUrl: string): Creator | null {
-  const slug = decodeURIComponent(usernameFromUrl).trim().toLowerCase();
-  if (!slug) return null;
-  const bySeed = creators.find((c) => c.username.toLowerCase() === slug);
-  if (bySeed) return bySeed;
-  const me = creators[0]!;
+  const byRegistry = resolveCreatorByUsername(usernameFromUrl);
+  if (byRegistry) return byRegistry;
+  const me = getMeId();
+  if (!me) return null;
+  const meCreator = resolveCreator(me);
+  if (!meCreator) return null;
   const o = getSelfProfileOverrides();
-  const effective = (o?.username?.trim() || me.username).toLowerCase();
-  if (slug === effective) return me;
+  const slug = decodeURIComponent(usernameFromUrl).trim().toLowerCase().replace(/^@+/, "");
+  const effective = (o?.username?.trim() || meCreator.username).toLowerCase();
+  if (slug === effective) return meCreator;
   return null;
 }
 
 export function isSelfProfileSlug(usernameFromUrl: string): boolean {
+  const me = getMeId();
+  if (!me) return false;
   const c = resolveProfileCreator(usernameFromUrl);
-  return c?.id === ME_CREATOR_ID;
+  return c?.id === me;
 }

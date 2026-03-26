@@ -6,10 +6,12 @@ import { motion } from "framer-motion";
 import { CreatorBadge } from "@/components/badges/CreatorBadge";
 import { GlowButton } from "@/components/ui/GlowButton";
 import type { Creator } from "@/lib/types";
-import { useInteractionsStore, ME_ID } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { useHydrationSafeCreator } from "@/lib/profile/useHydrationSafeCreator";
 
 export function FeaturedCreatorCard({ creator: creatorProp }: { creator: Creator }) {
+  const meId = useMeId();
   const creator = useHydrationSafeCreator(creatorProp);
   const isFollowing = useInteractionsStore((s) => s.isFollowing(creator.id));
   const toggleFollow = useInteractionsStore((s) => s.toggleFollow);
@@ -40,7 +42,7 @@ export function FeaturedCreatorCard({ creator: creatorProp }: { creator: Creator
               </div>
             </div>
           </Link>
-          {creator.id !== ME_ID ? (
+          {creator.id !== meId ? (
             <div className="shrink-0 pt-1">
               <GlowButton
                 type="button"

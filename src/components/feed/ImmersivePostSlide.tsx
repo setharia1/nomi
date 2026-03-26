@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -30,7 +30,8 @@ import { CreatorBadge } from "@/components/badges/CreatorBadge";
 import { cn } from "@/lib/cn";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 import type { Post } from "@/lib/types";
-import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { useMeId } from "@/lib/auth/meId";
+import { useInteractionsStore } from "@/lib/interactions/store";
 import { cloneFollowingGraph } from "@/lib/social/followGraph";
 import { ShareSheet } from "@/components/interactions/ShareSheet";
 import { formatEngagementCount } from "@/lib/format/count";
@@ -38,13 +39,14 @@ import { formatViewLabel, getTotalPostViews } from "@/lib/views/parsePostViews";
 import { usePostViewsStore } from "@/lib/views/postViewsStore";
 import { useFeedPlaybackStore } from "@/lib/media/feedPlaybackStore";
 
-const SEED_ME_FOLLOWING_IDS = cloneFollowingGraph()[ME_ID] ?? [];
-
-function isFollowingFromSeed(creatorId: string) {
-  return SEED_ME_FOLLOWING_IDS.includes(creatorId);
-}
-
 export function ImmersivePostSlide({ post }: { post: Post }) {
+  const meId = useMeId();
+  const seedMeFollowingIds = useMemo(
+    () => (meId ? cloneFollowingGraph()[meId] ?? [] : []),
+    [meId],
+  );
+  const isFollowingFromSeed = (creatorId: string) => seedMeFollowingIds.includes(creatorId);
+
   const router = useRouter();
   const creator = getCreatorByIdResolved(post.creatorId)!;
   const rootRef = useRef<HTMLDivElement>(null);

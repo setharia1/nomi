@@ -1,4 +1,5 @@
-import { creators, getCreatorById, posts } from "@/lib/mock-data";
+import { creators, posts } from "@/lib/mock-data";
+import { resolveCreator } from "@/lib/accounts/resolveCreator";
 import type { Creator, Post } from "@/lib/types";
 import type { BoardHit, PersonalizationSignals, SearchSnapshot, SearchTab, TopicHit } from "./types";
 import { slugifyTag } from "./slug";
@@ -55,7 +56,7 @@ export function buildPersonalizationSignals(
     }
   }
   for (const id of args.savedCreatorIds) {
-    const c = getCreatorById(id);
+    const c = resolveCreator(id);
     if (c) {
       c.tags.forEach((t) => affinityTagSlugs.add(slugifyTag(t)));
       affinityCreatorIds.add(c.id);
@@ -266,7 +267,7 @@ export function runSearch(
 
   let personalizedHint: string | undefined;
   if (sig.followedCreatorIds.length) {
-    const c = getCreatorById(sig.followedCreatorIds[0]);
+    const c = resolveCreator(sig.followedCreatorIds[0]!);
     personalizedHint = c ? `Because you follow ${c.displayName}` : undefined;
   } else if (sig.affinityTagSlugs.length) {
     personalizedHint = `Because you engage with ${sig.affinityTagSlugs.slice(0, 2).join(" · ")} aesthetics`;

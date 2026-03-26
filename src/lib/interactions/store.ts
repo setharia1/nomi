@@ -21,6 +21,7 @@ import {
   saveSavedMoodBoardIds,
   saveSavedPostIds,
 } from "@/lib/profile/savedStorage";
+import { useAuthStore } from "@/lib/auth/authStore";
 
 export type InteractionComment = {
   id: string;
@@ -30,10 +31,11 @@ export type InteractionComment = {
   createdAt: number;
 };
 
-/** Stable reference for “no comments yet” — inline `[]` breaks useSyncExternalStore snapshots. */
 export const EMPTY_COMMENTS: InteractionComment[] = [];
 
-export const ME_ID = creators[0]?.id ?? "c1";
+function me(): string {
+  return useAuthStore.getState().account?.id ?? "";
+}
 
 const likedKey = "nomi-liked-post-ids-v1";
 const followedKey = "nomi-followed-creator-ids-v1";
@@ -61,7 +63,7 @@ function safeSaveIds(key: string, ids: string[]) {
   try {
     localStorage.setItem(key, JSON.stringify(ids));
   } catch {
-    // quota / private mode
+    /* */
   }
 }
 
@@ -83,7 +85,7 @@ function safeSaveFollowingGraph(next: Record<string, string[]>) {
   try {
     localStorage.setItem(followGraphKey, JSON.stringify(next));
   } catch {
-    // quota
+    /* */
   }
 }
 
@@ -105,7 +107,7 @@ function safeSaveComments(next: Record<string, InteractionComment[]>) {
   try {
     localStorage.setItem(commentsKey, JSON.stringify(next));
   } catch {
-    // quota / private mode
+    /* */
   }
 }
 
@@ -126,7 +128,7 @@ function safeSaveNotifications(next: NotificationItem[]) {
   try {
     localStorage.setItem(notificationsKey, JSON.stringify(next));
   } catch {
-    // quota
+    /* */
   }
 }
 
@@ -147,7 +149,7 @@ function safeSaveShares(next: Record<string, number>) {
   try {
     localStorage.setItem(sharesKey, JSON.stringify(next));
   } catch {
-    // quota
+    /* */
   }
 }
 
@@ -161,15 +163,15 @@ export type ShareCounts = Record<string, number>;
 export type InteractionsState = {
   hydrated: boolean;
   likedPostIds: string[];
-  /** Who each creator follows (creator ids). Source of truth for the mock social graph. */
   followingByUserId: Record<string, string[]>;
   commentsByPostId: Record<string, InteractionComment[]>;
   notifications: NotificationItem[];
   shareCountsByPostId: ShareCounts;
-
   savedPostIds: string[];
   savedCreatorIds: string[];
   savedMoodBoardIds: string[];
+
+  reconcileFollowingGraph: () => void;
 
   isLiked: (postId: string) => boolean;
   isSaved: (postId: string) => boolean;
@@ -209,6 +211,7 @@ export const useInteractionsStore = create<InteractionsState>()((set, get) => {
   const hydrateFromLocalStorage = () => {
     if (typeof window === "undefined") return;
 
+    const my = me();
     const savedGraph = safeLoadFollowingGraph();
     let graph: Record<string, string[]>;
     if (savedGraph) {
@@ -216,12 +219,12 @@ export const useInteractionsStore = create<InteractionsState>()((set, get) => {
     } else {
       graph = cloneFollowingGraph();
       const legacyFollowed = safeLoadIds(followedKey);
-      if (legacyFollowed.length) {
-        graph = mergeLegacyMeFollowing(graph, ME_ID, legacyFollowed);
+      if (legacyFollowed.length && my) {
+        graph = mergeLegacyMeFollowing(graph, my, legacyFollowed);
       }
       safeSaveFollowingGraph(graph);
     }
-    safeSaveIds(followedKey, graph[ME_ID] ?? []);
+    if (my) safeSaveIds(followedKey, graph[my] ?? []);
 
     const nextLiked = safeLoadIds(likedKey);
     const nextComments = safeLoadComments();
@@ -263,7 +266,8 @@ export const useInteractionsStore = create<InteractionsState>()((set, get) => {
   function persistFollowGraph(graph: Record<string, string[]>) {
     const normalized = normalizeFollowingGraph(graph);
     safeSaveFollowingGraph(normalized);
-    safeSaveIds(followedKey, normalized[ME_ID] ?? []);
+    const my = me();
+    if (my) safeSaveIds(followedKey, normalized[my] ?? []);
   }
 
   return {
@@ -277,31 +281,78 @@ export const useInteractionsStore = create<InteractionsState>()((set, get) => {
     savedCreatorIds,
     savedMoodBoardIds,
 
+    reconcileFollowingGraph: () => {
+      const cur = get().followingByUserId;
+      const next = cloneFollowingGraph(cur);
+      set({ followingByUserId: next });
+      persistFollowGraph(next);
+    },
+
     isLiked: (postId) => get().likedPostIds.includes(postId),
     isSaved: (postId) => get().savedPostIds.includes(postId),
-    isFollowing: (creatorId) => (get().followingByUserId[ME_ID] ?? []).includes(creatorId),
-    /** Do not use from `useInteractionsStore` selectors — use `state.commentsByPostId[id]` so subscriptions stay consistent. */
+    isFollowing: (creatorId) => (get().followingByUserId[me()] ?? []).includes(creatorId),
     getComments: (postId) => get().commentsByPostId[postId] ?? EMPTY_COMMENTS,
 
     getFollowerCount: (creatorId) => countFollowers(creatorId, get().followingByUserId),
     getFollowingCount: (creatorId) => (get().followingByUserId[creatorId] ?? []).length,
     listFollowerIds: (creatorId) => listFollowerIds(creatorId, get().followingByUserId),
     listFollowingIds: (creatorId) => [...(get().followingByUserId[creatorId] ?? [])],
-    getMeFollowingIds: () => [...(get().followingByUserId[ME_ID] ?? [])],
+    getMeFollowingIds: () => [...(get().followingByUserId[me()] ?? [])],
     getFollowerCountsMap: () => computeFollowerCounts(get().followingByUserId),
 
     toggleFollow: (creatorId) => {
-      if (creatorId === ME_ID) return;
+      const myId = me();
+      if (!myId || creatorId === myId) return;
+      const token = useAuthStore.getState().token;
+      if (token) {
+        void (async () => {
+          const r = await fetch("/api/nomi/following", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ targetId: creatorId }),
+          });
+          if (!r.ok) return;
+          const { followingIds } = (await r.json()) as { followingIds: string[] };
+          const graph = normalizeFollowingGraph({
+            ...get().followingByUserId,
+            [myId]: followingIds,
+          });
+          set({ followingByUserId: graph });
+          persistFollowGraph(graph);
+
+          const followed = getCreatorByIdResolved(creatorId);
+          if (followed && followingIds.includes(creatorId)) {
+            const addNoti: NotificationItem = {
+              id: createId("n"),
+              type: "follow",
+              actor: followed,
+              message: `You're now following @${followed.username}`,
+              time: "now",
+              read: false,
+            };
+            const updated = [addNoti, ...get().notifications];
+            set({ notifications: updated });
+            persistSnapshot({ notifications: updated });
+          }
+        })();
+        return;
+      }
+
       const graph = normalizeFollowingGraph({ ...get().followingByUserId });
-      const cur = graph[ME_ID] ?? [];
+      const cur = graph[myId] ?? [];
       const wasFollowing = cur.includes(creatorId);
-      const nextMe = wasFollowing ? cur.filter((id) => id !== creatorId) : [creatorId, ...cur.filter((id) => id !== creatorId)];
-      graph[ME_ID] = nextMe;
+      const nextMe = wasFollowing
+        ? cur.filter((id) => id !== creatorId)
+        : [creatorId, ...cur.filter((id) => id !== creatorId)];
+      graph[myId] = nextMe;
       set({ followingByUserId: graph });
       persistFollowGraph(graph);
 
-      const followed = getCreatorByIdResolved(creatorId)!;
-      if (!wasFollowing) {
+      const followed = getCreatorByIdResolved(creatorId);
+      if (followed && !wasFollowing) {
         const addNoti: NotificationItem = {
           id: createId("n"),
           type: "follow",
@@ -325,8 +376,10 @@ export const useInteractionsStore = create<InteractionsState>()((set, get) => {
       set({ likedPostIds: next });
       persistSnapshot({ likedPostIds: next });
 
-      if (willLike && post && creator) {
-        const actor = getCreatorByIdResolved(ME_ID)!;
+      const myId = me();
+      if (willLike && post && creator && myId) {
+        const actor = getCreatorByIdResolved(myId);
+        if (!actor) return;
         const updatedNoti: NotificationItem = {
           id: createId("n"),
           type: "like",
@@ -354,11 +407,15 @@ export const useInteractionsStore = create<InteractionsState>()((set, get) => {
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const me = getCreatorByIdResolved(ME_ID)!;
+      const myId = me();
+      if (!myId) return;
+      const u = getCreatorByIdResolved(myId);
+      if (!u) return;
+
       const newComment: InteractionComment = {
         id: createId("cm"),
         postId,
-        userId: ME_ID,
+        userId: myId,
         text: trimmed,
         createdAt: Date.now(),
       };
@@ -373,7 +430,7 @@ export const useInteractionsStore = create<InteractionsState>()((set, get) => {
       const updatedNoti: NotificationItem = {
         id: createId("n"),
         type: "comment",
-        actor: me,
+        actor: u,
         message: `commented on ${post?.category ?? "a signal"}`,
         time: "now",
         read: false,

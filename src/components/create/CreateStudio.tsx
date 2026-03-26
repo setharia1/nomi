@@ -18,7 +18,7 @@ import {
   loadDrafts,
 } from "@/lib/create/drafts";
 import { useDraftsStore } from "@/lib/create/draftsStore";
-import { ME_ID } from "@/lib/interactions/store";
+import { requireMeId } from "@/lib/auth/meId";
 import { buildPostFromDraft, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
 import { captureVideoPosterDataUrl } from "@/lib/media/videoPoster";
 
@@ -134,7 +134,7 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
     const published = buildPostFromDraft({
       draft,
       mediaUrl: sessionMediaUrl,
-      creatorId: ME_ID,
+      creatorId: requireMeId(),
       posterDataUrl,
     });
     useContentMemoryStore.getState().publishPost(published);
