@@ -13,7 +13,7 @@ export function useHydrationSafeCreator(creator: Creator): Creator {
   const meId = useMeId();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    setMounted(true);
+    queueMicrotask(() => setMounted(true));
   }, []);
   if (!meId || creator.id !== meId) return creator;
   if (!mounted) return creator;

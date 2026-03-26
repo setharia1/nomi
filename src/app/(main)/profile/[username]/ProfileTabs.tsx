@@ -82,7 +82,7 @@ export function ProfileTabs({
     useDraftsStore.getState().hydrate();
     const syncArchive = () => setArchivedPostIds(loadArchivedPostIds());
     syncArchive();
-    setTabsContentSynced(true);
+    queueMicrotask(() => setTabsContentSynced(true));
     window.addEventListener("nomi-archive-changed", syncArchive);
     return () => window.removeEventListener("nomi-archive-changed", syncArchive);
   }, [hydrateContent]);

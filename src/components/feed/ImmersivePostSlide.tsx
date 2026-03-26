@@ -69,7 +69,7 @@ export function ImmersivePostSlide({ post }: { post: Post }) {
   /** Match SSR/first paint to seed graph & empty local overlays — then apply persisted interactions. */
   const [socialMounted, setSocialMounted] = useState(false);
   useEffect(() => {
-    setSocialMounted(true);
+    queueMicrotask(() => setSocialMounted(true));
   }, []);
 
   const likedLive = useInteractionsStore((s) => s.likedPostIds.includes(post.id));
@@ -193,7 +193,7 @@ export function ImmersivePostSlide({ post }: { post: Post }) {
   }, []);
 
   useEffect(() => {
-    setCaptionExpanded(false);
+    queueMicrotask(() => setCaptionExpanded(false));
   }, [post.id]);
 
   useEffect(() => {
@@ -204,8 +204,10 @@ export function ImmersivePostSlide({ post }: { post: Post }) {
         g.holdTimer = null;
       }
       g.heldPause = false;
-      setHoldPauseUi(false);
-      setMuteFlash(null);
+      queueMicrotask(() => {
+        setHoldPauseUi(false);
+        setMuteFlash(null);
+      });
       if (muteFlashTimerRef.current) {
         clearTimeout(muteFlashTimerRef.current);
         muteFlashTimerRef.current = null;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDbWithSession } from "@/lib/server/nomiSession";
-import { loadNomiDb, saveNomiDb } from "@/lib/server/nomiDb";
+import { saveNomiDb } from "@/lib/server/nomiDb";
 
 export async function GET(req: Request) {
   const { db, accountId } = await loadDbWithSession(req);

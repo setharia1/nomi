@@ -32,13 +32,18 @@ export function ProfilePageClient() {
 
   useEffect(() => {
     if (localCreator) {
-      setRemoteCreator(null);
-      setFetchDone(true);
+      queueMicrotask(() => {
+        setRemoteCreator(null);
+        setFetchDone(true);
+      });
       return;
     }
     let cancelled = false;
-    setFetchDone(false);
-    setRemoteCreator(null);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setFetchDone(false);
+      setRemoteCreator(null);
+    });
     (async () => {
       const r = await fetch(`/api/nomi/accounts/by-username/${encodeURIComponent(username)}`);
       if (cancelled) return;

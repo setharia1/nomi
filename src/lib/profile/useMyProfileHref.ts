@@ -22,5 +22,5 @@ export function useMyProfileHref(): string {
     const fromReg = account?.id ? resolveCreator(account.id) : undefined;
     const u = (o?.username?.trim() || fromReg?.username || account?.username || "you").trim();
     return `/profile/${encodeURIComponent(u)}`;
-  }, [account?.id, account?.username, profileEpoch]);
+  }, [account, profileEpoch]);
 }

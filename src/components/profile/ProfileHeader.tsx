@@ -117,7 +117,7 @@ export function ProfileHeader({
 
   const [socialStatsMounted, setSocialStatsMounted] = useState(false);
   useEffect(() => {
-    setSocialStatsMounted(true);
+    queueMicrotask(() => setSocialStatsMounted(true));
   }, []);
 
   const followerCount = socialStatsMounted ? followerCountLive : seedFollowerCount(creator.id);
@@ -137,7 +137,7 @@ export function ProfileHeader({
     hydrateContent();
     const syncArchive = () => setArchivedIds(loadArchivedPostIds());
     syncArchive();
-    setProfileMetricsSynced(true);
+    queueMicrotask(() => setProfileMetricsSynced(true));
     window.addEventListener("nomi-archive-changed", syncArchive);
     return () => window.removeEventListener("nomi-archive-changed", syncArchive);
   }, [hydrateContent]);
