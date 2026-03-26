@@ -18,8 +18,8 @@ export default function ExplorePage() {
     <div className="space-y-[var(--nomi-section-gap)] pb-4">
       <PageHeader
         kicker="Discovery"
-        title="Explore real signals"
-        description="Every tile is a published post on Nomi — no demo filler, only what the network actually shares."
+        title="Explore the network"
+        description="Everything here is from real publishes in your app — no demo accounts or placeholder media."
       />
 
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="relative">

@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Compass } from "lucide-react";
-import { CURATED_TOPIC_SLUGS } from "@/lib/search/constants";
 import { topicSlugFromPathSegment, slugifyTag } from "@/lib/search/slug";
 import { creators, posts as seedPosts } from "@/lib/mock-data";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
@@ -57,25 +56,22 @@ export function TopicHubClient({ slug: raw }: { slug: string }) {
   const catalogPosts = useMemo(() => useContentMemoryStore.getState().mergeWithSeed(seedPosts), [userPosts]);
 
   const key = topicSlugFromPathSegment(raw);
-  const curated = CURATED_TOPIC_SLUGS.find((c) => c.slug === key);
   const topicHit = useMemo(() => buildTopicHits(catalogPosts, creators).find((t) => t.slug === key), [catalogPosts, key]);
   const topicPosts = useMemo(
     () => catalogPosts.filter((p) => p.tags.some((tag) => slugifyTag(tag) === key)),
     [catalogPosts, key],
   );
 
-  if (!topicHit && topicPosts.length === 0 && !curated) {
+  if (!topicHit && topicPosts.length === 0) {
     notFound();
   }
 
   const label =
     topicHit?.label ??
-    curated?.label ??
     key
       .split("-")
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");
-  const blurb = curated?.blurb;
   const rankedCreators = creatorsForTopic(topicPosts);
   const related = relatedTags(topicPosts, key);
   const topPosts = topicPosts.slice().sort((a, b) => b.likes - a.likes);
@@ -91,7 +87,7 @@ export function TopicHubClient({ slug: raw }: { slug: string }) {
           <ArrowLeft className="h-[1.15rem] w-[1.15rem]" strokeWidth={1.75} />
         </Link>
         <div className="min-w-0 flex-1">
-          <PageHeader kicker="Topic hub" title={`#${label}`} description={blurb ?? undefined} />
+          <PageHeader kicker="Topic hub" title={`#${label}`} />
           {topicHit || topicPosts.length > 0 ? (
             <p className="mt-2 text-xs text-white/42">
               {topicHit?.postCount ?? topicPosts.length} posts · {topicHit?.creatorCount ?? rankedCreators.length}{" "}

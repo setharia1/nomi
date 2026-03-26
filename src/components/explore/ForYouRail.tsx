@@ -6,20 +6,64 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { posts as seedPosts } from "@/lib/mock-data";
-import { useContentMemoryStore, sortPostsForProfileGrid } from "@/lib/content/contentMemoryStore";
+import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { ME_CREATOR_ID } from "@/lib/profile/meCreator";
+import { rankForYouFeed } from "@/lib/feed/forYouRanking";
+import { buildPersonalizationSignals } from "@/lib/search/engine";
+import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { computeFollowerCounts } from "@/lib/social/followGraph";
 
 export function ForYouRail() {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
 
+  const intHydrated = useInteractionsStore((s) => s.hydrated);
+  const followingByUserId = useInteractionsStore((s) => s.followingByUserId);
+  const likedPostIds = useInteractionsStore((s) => s.likedPostIds);
+  const savedPostIds = useInteractionsStore((s) => s.savedPostIds);
+  const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
+
+  const meFollowing = followingByUserId[ME_ID] ?? [];
+  const followerCounts = useMemo(() => computeFollowerCounts(followingByUserId), [followingByUserId]);
+
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
+  const merged = useMemo(
+    () => useContentMemoryStore.getState().mergeWithSeed(seedPosts),
+    [userPosts],
+  );
+
+  const sig = useMemo(
+    () =>
+      buildPersonalizationSignals(
+        {
+          followedCreatorIds: intHydrated ? meFollowing : [],
+          likedPostIds: intHydrated ? likedPostIds : [],
+          savedPostIds: intHydrated ? savedPostIds : [],
+          savedCreatorIds: intHydrated ? savedCreatorIds : [],
+          recentQueries: [],
+          followerCounts,
+        },
+        merged,
+      ),
+    [
+      intHydrated,
+      meFollowing,
+      likedPostIds,
+      savedPostIds,
+      savedCreatorIds,
+      followerCounts,
+      merged,
+    ],
+  );
+
   const list = useMemo(() => {
-    const merged = useContentMemoryStore.getState().mergeWithSeed(seedPosts);
-    return sortPostsForProfileGrid(merged).slice(0, 12);
-  }, [userPosts]);
+    const others = merged.filter((p) => p.creatorId !== ME_CREATOR_ID);
+    if (!others.length) return [];
+    return rankForYouFeed(others, sig).slice(0, 12);
+  }, [merged, sig]);
 
   if (!list.length) return null;
 
@@ -28,7 +72,7 @@ export function ForYouRail() {
       <div className="flex items-end justify-between">
         <div>
           <h2 className="font-[family-name:var(--font-syne)] text-lg font-bold text-white">For you</h2>
-          <p className="mt-0.5 text-xs text-white/45">Fresh posts from the network, newest first</p>
+          <p className="mt-0.5 text-xs text-white/45">From other creators — personalized from real posts only</p>
         </div>
       </div>
       <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2">

@@ -3,25 +3,68 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { FeedTab } from "@/lib/types";
+import { FeedScopeBar, type FeedScope } from "./FeedScopeBar";
 import { FeedTabBar } from "./FeedTabBar";
 import { ImmersivePostSlide } from "./ImmersivePostSlide";
 import {
+  selectForYouPoolMerged,
+  selectFollowingPoolMerged,
   selectHomeFeedPostsSeed,
-  selectHomeFeedPostsShuffled,
   useContentMemoryStore,
 } from "@/lib/content/contentMemoryStore";
 import { useFeedPlaybackStore } from "@/lib/media/feedPlaybackStore";
 import Link from "next/link";
 import { GlowButton } from "@/components/ui/GlowButton";
+import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
+import { computeFollowerCounts } from "@/lib/social/followGraph";
+import { buildPersonalizationSignals } from "@/lib/search/engine";
+import { feedTabLabels, posts as seedPosts } from "@/lib/mock-data";
+import { rankForYouFeed, sortFollowingFeed } from "@/lib/feed/forYouRanking";
 
 export function HomeImmersiveFeed() {
+  const [scope, setScope] = useState<FeedScope>("for-you");
   const [tab, setTab] = useState<FeedTab>("ai-videos");
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
-  /** Avoid hydration mismatch: SSR has no local user posts until after mount. */
   const [feedMergedSynced, setFeedMergedSynced] = useState(false);
-  /** Bumps when tab changes so the home order re-shuffles (new random sequence). */
-  const [shuffleGen, setShuffleGen] = useState(0);
+
+  const intHydrated = useInteractionsStore((s) => s.hydrated);
+  const followingByUserId = useInteractionsStore((s) => s.followingByUserId);
+  const likedPostIds = useInteractionsStore((s) => s.likedPostIds);
+  const savedPostIds = useInteractionsStore((s) => s.savedPostIds);
+  const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
+
+  const meFollowing = followingByUserId[ME_ID] ?? [];
+  const followerCounts = useMemo(() => computeFollowerCounts(followingByUserId), [followingByUserId]);
+
+  const mergedPosts = useMemo(
+    () => useContentMemoryStore.getState().mergeWithSeed(seedPosts),
+    [userPosts],
+  );
+
+  const sig = useMemo(
+    () =>
+      buildPersonalizationSignals(
+        {
+          followedCreatorIds: intHydrated ? meFollowing : [],
+          likedPostIds: intHydrated ? likedPostIds : [],
+          savedPostIds: intHydrated ? savedPostIds : [],
+          savedCreatorIds: intHydrated ? savedCreatorIds : [],
+          recentQueries: [],
+          followerCounts,
+        },
+        mergedPosts,
+      ),
+    [
+      intHydrated,
+      meFollowing,
+      likedPostIds,
+      savedPostIds,
+      savedCreatorIds,
+      followerCounts,
+      mergedPosts,
+    ],
+  );
 
   useEffect(() => {
     hydrate();
@@ -29,14 +72,18 @@ export function HomeImmersiveFeed() {
     setFeedMergedSynced(true);
   }, [hydrate]);
 
-  useEffect(() => {
-    setShuffleGen((g) => g + 1);
-  }, [tab, feedMergedSynced]);
-
   const list = useMemo(() => {
     if (!feedMergedSynced) return selectHomeFeedPostsSeed(tab);
-    return selectHomeFeedPostsShuffled(tab, shuffleGen);
-  }, [tab, userPosts, feedMergedSynced, shuffleGen]);
+    if (scope === "for-you") {
+      const pool = selectForYouPoolMerged(tab);
+      return rankForYouFeed(pool, sig);
+    }
+    const pool = selectFollowingPoolMerged(tab, meFollowing);
+    return sortFollowingFeed(pool);
+  }, [feedMergedSynced, scope, tab, userPosts, meFollowing, sig]);
+
+  const emptyForYou = scope === "for-you" && list.length === 0;
+  const emptyFollowing = scope === "following" && list.length === 0;
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col w-full">
@@ -45,8 +92,9 @@ export function HomeImmersiveFeed() {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          className="pointer-events-auto w-full max-w-md px-2 sm:px-3 md:max-w-lg"
+          className="pointer-events-auto flex w-full max-w-md flex-col gap-2 px-2 sm:px-3 md:max-w-lg"
         >
+          <FeedScopeBar value={scope} onChange={setScope} />
           <FeedTabBar value={tab} onChange={setTab} />
         </motion.div>
       </div>
@@ -57,14 +105,14 @@ export function HomeImmersiveFeed() {
       >
         <AnimatePresence mode="wait">
           <motion.div
-            key={tab}
+            key={`${scope}-${tab}`}
             initial={{ opacity: 0.001 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0.001 }}
             transition={{ duration: 0.2 }}
             className="flex w-full flex-col"
           >
-            {list.length === 0 ? (
+            {emptyForYou ? (
               <div className="flex h-[100dvh] snap-start flex-col items-center justify-center px-6 text-center nomi-ambient-soft">
                 <div className="relative max-w-md overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03] px-6 py-10 sm:px-10 sm:py-12">
                   <div
@@ -76,28 +124,64 @@ export function HomeImmersiveFeed() {
                     aria-hidden
                   />
                   <p className="relative font-[family-name:var(--font-syne)] text-xl font-bold text-white sm:text-2xl">
-                    Waiting on the network
+                    For you needs more voices
                   </p>
                   <p className="relative mt-3 text-sm leading-relaxed text-white/48">
-                    Your home feed only shows other creators — nothing from your account. When more people publish in
-                    this tab, new drops will appear here in a fresh random order.
+                    This feed is everyone else’s public posts in{" "}
+                    <span className="text-white/65">{feedTabLabels[tab]}</span>, ranked for you. There aren’t other
+                    creators with posts here yet — so there’s nothing to recommend. Your own posts stay on your profile.
                   </p>
                   <div className="relative mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
                     <Link href="/explore" className="sm:min-w-[11rem]">
                       <GlowButton type="button" className="w-full justify-center">
-                        Explore creators
+                        Explore the network
                       </GlowButton>
                     </Link>
-                    <Link href={`/profile/${encodeURIComponent("you")}`} className="sm:min-w-[11rem]">
+                    <Link href="/create" className="sm:min-w-[11rem]">
                       <GlowButton type="button" variant="ghost" className="w-full justify-center border-white/12">
-                        Your profile
+                        Publish a signal
                       </GlowButton>
                     </Link>
                   </div>
                 </div>
               </div>
+            ) : emptyFollowing ? (
+              <div className="flex h-[100dvh] snap-start flex-col items-center justify-center px-6 text-center nomi-ambient-soft">
+                <div className="relative max-w-md overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.03] px-6 py-10 sm:px-10 sm:py-12">
+                  <div
+                    className="pointer-events-none absolute inset-0 opacity-55"
+                    style={{
+                      background:
+                        "radial-gradient(ellipse 90% 55% at 50% -20%, rgba(56, 189, 248, 0.1), transparent 60%)",
+                    }}
+                    aria-hidden
+                  />
+                  <p className="relative font-[family-name:var(--font-syne)] text-xl font-bold text-white sm:text-2xl">
+                    Following is quiet
+                  </p>
+                  <p className="relative mt-3 text-sm leading-relaxed text-white/48">
+                    This tab only shows posts from people you follow — in order of what’s newest. Follow more creators
+                    (or wait until they publish in this format) to fill this feed.
+                  </p>
+                  <div className="relative mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
+                    <Link href="/search" className="sm:min-w-[11rem]">
+                      <GlowButton type="button" className="w-full justify-center">
+                        Find people
+                      </GlowButton>
+                    </Link>
+                    <GlowButton
+                      type="button"
+                      variant="ghost"
+                      className="w-full justify-center border-white/12 sm:min-w-[11rem]"
+                      onClick={() => setScope("for-you")}
+                    >
+                      Back to For you
+                    </GlowButton>
+                  </div>
+                </div>
+              </div>
             ) : (
-              list.map((post) => <ImmersivePostSlide key={`${tab}-${post.id}`} post={post} />)
+              list.map((post) => <ImmersivePostSlide key={`${scope}-${tab}-${post.id}`} post={post} />)
             )}
           </motion.div>
         </AnimatePresence>

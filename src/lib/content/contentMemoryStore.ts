@@ -5,7 +5,6 @@ import type { FeedTab, Post } from "@/lib/types";
 import type { PostDraft } from "@/lib/create/types";
 import { posts as seedPosts } from "@/lib/mock-data";
 import { ME_CREATOR_ID } from "@/lib/profile/meCreator";
-import { shuffleHomeFeed } from "@/lib/feed/homeFeedShuffle";
 
 const KEY = "nomi-user-posts-v1";
 
@@ -120,7 +119,7 @@ export function selectPostsForCreatorSeed(creatorId: string): Post[] {
   return seedPosts.filter((p) => p.creatorId === creatorId);
 }
 
-/** Seed-only feed tab ordering — legacy explore; home uses `selectHomeFeedPostsSeed`. */
+/** Seed-only feed tab ordering (empty without demo posts). Explore may still sort merged catalog. */
 export function selectPostsForFeedTabSeed(tab: FeedTab): Post[] {
   return seedPosts
     .filter((p) => p.feedTab === tab)
@@ -128,22 +127,26 @@ export function selectPostsForFeedTabSeed(tab: FeedTab): Post[] {
     .sort((a, b) => b.likes - a.likes);
 }
 
-/** Home feed pool: everyone except the signed-in creator (stable for SSR). */
-export function selectHomeFeedPostsSeed(tab: FeedTab): Post[] {
-  return seedPosts
-    .filter((p) => p.feedTab === tab && p.creatorId !== ME_CREATOR_ID)
-    .slice()
-    .sort((a, b) => a.id.localeCompare(b.id));
+/** Pre-hydration / SSR: seed catalog has no posts — matches first client paint before local storage loads. */
+export function selectHomeFeedPostsSeed(_tab: FeedTab): Post[] {
+  return [];
 }
 
-/** Posts from others only in this tab (unordered). */
-export function selectHomeFeedPoolMerged(tab: FeedTab): Post[] {
+/**
+ * Home (see `HomeImmersiveFeed`):
+ * - **For you** — `selectForYouPoolMerged` → everyone except the signed-in creator in this tab,
+ *   then `rankForYouFeed` (interests, engagement, freshness, follow boost, diversity).
+ * - **Following** — `selectFollowingPoolMerged` → only followed creator ids in this tab,
+ *   then `sortFollowingFeed` (newest first).
+ */
+export function selectForYouPoolMerged(tab: FeedTab): Post[] {
   return selectAllPostsMerged().filter((p) => p.feedTab === tab && p.creatorId !== ME_CREATOR_ID);
 }
 
-/** Home feed: other people’s posts only, shuffled — call from client after sync with a changing `generation`. */
-export function selectHomeFeedPostsShuffled(tab: FeedTab, generation: number): Post[] {
-  return shuffleHomeFeed(selectHomeFeedPoolMerged(tab), tab, generation);
+/** Following: posts only from accounts the user follows in this tab. */
+export function selectFollowingPoolMerged(tab: FeedTab, followingCreatorIds: string[]): Post[] {
+  const allow = new Set(followingCreatorIds);
+  return selectAllPostsMerged().filter((p) => p.feedTab === tab && allow.has(p.creatorId));
 }
 
 export function selectPostsForFeedTabMerged(tab: FeedTab): Post[] {

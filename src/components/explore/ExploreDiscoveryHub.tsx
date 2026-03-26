@@ -5,12 +5,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Compass, Sparkles } from "lucide-react";
-import { buildPersonalizationSignals, buildTopicHits, runSearch } from "@/lib/search/engine";
+import { buildPersonalizationSignals, buildTopicHits } from "@/lib/search/engine";
 import { creators, posts as seedPosts } from "@/lib/mock-data";
 import { useContentMemoryStore, sortPostsForProfileGrid } from "@/lib/content/contentMemoryStore";
 import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
 import { CURATED_TOPIC_SLUGS } from "@/lib/search/constants";
+import { ME_CREATOR_ID } from "@/lib/profile/meCreator";
+import { rankForYouFeed } from "@/lib/feed/forYouRanking";
 
 export function ExploreDiscoveryHub() {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
@@ -57,9 +59,13 @@ export function ExploreDiscoveryHub() {
     ],
   );
 
-  const personalized = useMemo(() => runSearch("", "top", sig, catalog), [sig, catalog]);
   const topicHits = useMemo(() => buildTopicHits(catalog.posts, catalog.creators), [catalog]);
   const latest = useMemo(() => sortPostsForProfileGrid(catalog.posts).slice(0, 12), [catalog.posts]);
+  const forYouExplore = useMemo(() => {
+    const others = catalog.posts.filter((p) => p.creatorId !== ME_CREATOR_ID);
+    if (!others.length) return [];
+    return rankForYouFeed(others, sig).slice(0, 8);
+  }, [catalog.posts, sig]);
 
   if (!catalog.posts.length) {
     return (
@@ -144,11 +150,12 @@ export function ExploreDiscoveryHub() {
         </div>
       </section>
 
-      {personalized.posts.length ? (
+      {forYouExplore.length ? (
         <section className="space-y-3">
-          <h2 className="nomi-section-title">Recommended for you</h2>
+          <h2 className="nomi-section-title">For you</h2>
+          <p className="text-xs text-white/45">Other creators’ posts across the network, ranked from real signals only.</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {personalized.posts.slice(0, 8).map(({ post }) => (
+            {forYouExplore.map((post) => (
               <Link
                 key={post.id}
                 href={`/post/${post.id}`}
@@ -161,21 +168,23 @@ export function ExploreDiscoveryHub() {
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-white/[0.07] bg-gradient-to-br from-violet-500/[0.05] via-transparent to-cyan-400/[0.04] p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">Editorial hubs</p>
-        <p className="mt-1 text-xs text-white/45">Curated topic pages — they fill in as real posts tag in.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {CURATED_TOPIC_SLUGS.slice(0, 6).map((c) => (
-            <Link
-              key={c.slug}
-              href={`/explore/topic/${encodeURIComponent(c.slug)}`}
-              className="rounded-full border border-white/12 bg-black/30 px-3 py-1 text-xs text-white/80 hover:border-cyan-400/35"
-            >
-              #{c.label}
-            </Link>
-          ))}
-        </div>
-      </section>
+      {CURATED_TOPIC_SLUGS.length ? (
+        <section className="rounded-xl border border-white/[0.07] bg-gradient-to-br from-violet-500/[0.05] via-transparent to-cyan-400/[0.04] p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">Editorial hubs</p>
+          <p className="mt-1 text-xs text-white/45">Curated topic pages — they fill in as real posts tag in.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {CURATED_TOPIC_SLUGS.slice(0, 6).map((c) => (
+              <Link
+                key={c.slug}
+                href={`/explore/topic/${encodeURIComponent(c.slug)}`}
+                className="rounded-full border border-white/12 bg-black/30 px-3 py-1 text-xs text-white/80 hover:border-cyan-400/35"
+              >
+                #{c.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

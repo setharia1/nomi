@@ -376,37 +376,41 @@ export function SearchExperience() {
             )}
           </section>
 
-          <section className="space-y-3">
-            <h2 className="font-[family-name:var(--font-syne)] text-base font-bold text-white">Curated hubs</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {CURATED_TOPIC_SLUGS.map((hub) => (
-                <Link
-                  key={hub.slug}
-                  href={`/explore/topic/${encodeURIComponent(hub.slug)}`}
-                  className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3.5 transition-colors hover:border-violet-400/28 tap-highlight-none"
-                >
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">{hub.label}</p>
-                  <p className="mt-2 text-sm text-white/70">{hub.blurb}</p>
-                </Link>
-              ))}
-            </div>
-          </section>
+          {CURATED_TOPIC_SLUGS.length ? (
+            <section className="space-y-3">
+              <h2 className="font-[family-name:var(--font-syne)] text-base font-bold text-white">Curated hubs</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {CURATED_TOPIC_SLUGS.map((hub) => (
+                  <Link
+                    key={hub.slug}
+                    href={`/explore/topic/${encodeURIComponent(hub.slug)}`}
+                    className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3.5 transition-colors hover:border-violet-400/28 tap-highlight-none"
+                  >
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/40">{hub.label}</p>
+                    <p className="mt-2 text-sm text-white/70">{hub.blurb}</p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
-          <section className="space-y-3">
-            <h2 className="font-[family-name:var(--font-syne)] text-base font-bold text-white">Search by vibe</h2>
-            <div className="flex flex-wrap gap-2">
-              {AESTHETIC_VIBES.map((v) => (
-                <button
-                  key={v.slug}
-                  type="button"
-                  onClick={() => commitQuery(v.label)}
-                  className="rounded-full border border-cyan-400/20 bg-cyan-400/5 px-3 py-1.5 text-xs font-medium text-cyan-100/90 hover:border-cyan-400/40"
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          </section>
+          {AESTHETIC_VIBES.length ? (
+            <section className="space-y-3">
+              <h2 className="font-[family-name:var(--font-syne)] text-base font-bold text-white">Search by vibe</h2>
+              <div className="flex flex-wrap gap-2">
+                {AESTHETIC_VIBES.map((v) => (
+                  <button
+                    key={v.slug}
+                    type="button"
+                    onClick={() => commitQuery(v.label)}
+                    className="rounded-full border border-cyan-400/20 bg-cyan-400/5 px-3 py-1.5 text-xs font-medium text-cyan-100/90 hover:border-cyan-400/40"
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {preQuerySnapshot.creators.length ? (
             <section className="space-y-3">
