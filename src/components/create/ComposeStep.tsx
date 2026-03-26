@@ -95,8 +95,14 @@ export function ComposeStep({
   onNext: () => void;
   onSaveDraft: () => void;
 }) {
-  const [advancedOpen, setAdvancedOpen] = useState(path === "ai-post" || path === "concept-drop");
-  const aiHeavy = path === "ai-post" || draft.feedTab === "ai-videos" || draft.feedTab === "ai-photos";
+  const [advancedOpen, setAdvancedOpen] = useState(
+    path === "ai-post" || path === "ai-photo" || path === "concept-drop",
+  );
+  const aiHeavy =
+    path === "ai-post" ||
+    path === "ai-photo" ||
+    draft.feedTab === "ai-videos" ||
+    draft.feedTab === "ai-photos";
   const real = path === "record" || draft.feedTab === "real-life";
   const concept = path === "concept-drop" || draft.isConceptDrop;
 

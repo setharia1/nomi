@@ -1,4 +1,4 @@
-export type CreationPath = "record" | "upload" | "ai-post" | "concept-drop";
+export type CreationPath = "record" | "upload" | "ai-post" | "ai-photo" | "concept-drop";
 
 /** High-level wizard steps */
 export type StudioPhase = "chooser" | "capture" | "compose" | "preview" | "publishing" | "success";

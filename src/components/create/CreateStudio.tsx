@@ -85,7 +85,7 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
           feedTab:
             p === "record"
               ? "real-life"
-              : p === "concept-drop"
+              : p === "concept-drop" || p === "ai-photo"
                 ? "ai-photos"
                 : p === "ai-post"
                   ? "ai-videos"

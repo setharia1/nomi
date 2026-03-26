@@ -441,6 +441,103 @@ function AiVeoGenerateControls({ draft, prompt }: { draft: PostDraft; prompt: st
   );
 }
 
+function AiPhotoGenerateControls({
+  prompt,
+  setDraft,
+  sessionMediaUrl,
+  setSessionMediaUrl,
+  setSessionMime,
+}: {
+  prompt: string;
+  setDraft: React.Dispatch<React.SetStateAction<PostDraft>>;
+  sessionMediaUrl: string | null;
+  setSessionMediaUrl: (u: string | null) => void;
+  setSessionMime: (m: string | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<"1:1" | "9:16" | "16:9" | "4:3" | "3:4">("9:16");
+
+  const runGenerate = async () => {
+    const p = prompt.trim();
+    if (!p || busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/nomi/ai-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: p, aspectRatio }),
+      });
+      const j = (await res.json()) as {
+        imageBase64?: string;
+        mimeType?: string;
+        model?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(j.error || "Image generation failed");
+      }
+      const b64 = j.imageBase64;
+      const mime = j.mimeType?.trim() || "image/png";
+      if (!b64) throw new Error("No image data returned");
+      if (sessionMediaUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(sessionMediaUrl);
+      }
+      setSessionMime(mime);
+      setSessionMediaUrl(`data:${mime};base64,${b64}`);
+      setDraft((d) => ({
+        ...d,
+        mediaType: "image",
+        feedTab: "ai-photos",
+        modelUsed: j.model || d.modelUsed || "Imagen",
+        prompt: p,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Image generation failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t border-white/[0.08] pt-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {(["9:16", "16:9", "1:1", "4:3", "3:4"] as const).map((r) => (
+          <button
+            key={r}
+            type="button"
+            disabled={busy}
+            onClick={() => setAspectRatio(r)}
+            className={cn(
+              "rounded-xl border px-2 py-2 text-[11px] font-semibold transition-colors tap-highlight-none disabled:opacity-50",
+              aspectRatio === r
+                ? "border-fuchsia-400/45 bg-fuchsia-500/15 text-fuchsia-100"
+                : "border-white/12 bg-black/30 text-white/55 hover:border-white/20",
+            )}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+      <GlowButton
+        type="button"
+        variant="primary"
+        className="w-full"
+        disabled={!prompt.trim() || busy}
+        onClick={() => void runGenerate()}
+      >
+        {busy ? "Generating…" : "Generate image"}
+      </GlowButton>
+      <p className="text-[11px] leading-relaxed text-white/45">
+        Uses Google Imagen on the server — still appears in the <strong className="text-white/55">AI Photos</strong> home
+        tab and your profile&apos;s AI Photos grid after you publish.
+      </p>
+      {error ? <p className="text-xs text-rose-300/90">{error}</p> : null}
+    </div>
+  );
+}
+
 function UploadCapture({
   path,
   draft,
@@ -486,6 +583,9 @@ function UploadCapture({
       if (path === "ai-post") {
         feedTab = isVid ? "ai-videos" : "ai-photos";
       }
+      if (path === "ai-photo") {
+        feedTab = isVid ? "ai-videos" : "ai-photos";
+      }
       if (path === "upload") {
         feedTab = isVid ? "real-life" : "ai-photos";
       }
@@ -502,6 +602,8 @@ function UploadCapture({
     Boolean(sessionMediaUrl) ||
     path === "concept-drop" ||
     (path === "ai-post" && draft.prompt.trim().length > 0);
+  /** AI photo: need a still (generated or uploaded) before compose — not Veo background jobs. */
+  const effectiveCanContinue = path === "ai-photo" ? Boolean(sessionMediaUrl) : canContinue;
 
   return (
     <div className="space-y-5 pb-4">
@@ -515,17 +617,61 @@ function UploadCapture({
         </button>
         <div>
           <p className="font-[family-name:var(--font-syne)] text-lg font-bold text-white">
-            {path === "ai-post" ? "AI post" : path === "concept-drop" ? "Concept drop" : "Upload"}
+            {path === "ai-post"
+              ? "AI post"
+              : path === "ai-photo"
+                ? "AI photo"
+                : path === "concept-drop"
+                  ? "Concept drop"
+                  : "Upload"}
           </p>
           <p className="text-xs text-white/45">
             {path === "concept-drop"
               ? "Rough is beautiful — add a frame if you have one."
+              : path === "ai-photo"
+                ? "Describe the still you want, generate with Imagen, or upload your own image."
               : path === "ai-post"
                 ? "Describe the shot below and tap Generate, or upload your own clip."
                 : "Drop a finished render or camera export."}
           </p>
         </div>
       </div>
+
+      {path === "ai-photo" ? (
+        <GlassPanel className="space-y-3 border-fuchsia-400/20 p-4">
+          <div className="flex items-start gap-2 text-fuchsia-100/90">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em]">Google Imagen</p>
+              <p className="mt-0.5 text-xs leading-snug text-white/50">
+                Stills for the <span className="text-white/65">AI Photos</span> rail — generate here or drop your own
+                render below.
+              </p>
+            </div>
+          </div>
+          <textarea
+            value={draft.prompt}
+            onChange={(e) => setDraft((d) => ({ ...d, prompt: e.target.value }))}
+            placeholder="Describe the image (subject, lighting, lens, style)…"
+            rows={4}
+            className="w-full resize-none rounded-xl border border-white/10 bg-black/35 px-4 py-3 font-mono text-xs text-white placeholder:text-white/30 glow-focus focus:border-fuchsia-400/35"
+          />
+          <AiPhotoGenerateControls
+            prompt={draft.prompt}
+            setDraft={setDraft}
+            sessionMediaUrl={sessionMediaUrl}
+            setSessionMediaUrl={setSessionMediaUrl}
+            setSessionMime={setSessionMime}
+          />
+          <textarea
+            value={draft.processNotes}
+            onChange={(e) => setDraft((d) => ({ ...d, processNotes: e.target.value }))}
+            placeholder="Process notes (optional)"
+            rows={2}
+            className="w-full resize-none rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white placeholder:text-white/30 glow-focus focus:border-violet-400/35"
+          />
+        </GlassPanel>
+      ) : null}
 
       {path === "ai-post" ? (
         <GlassPanel className="space-y-3 border-cyan-400/15 p-4">
@@ -580,14 +726,18 @@ function UploadCapture({
         <input
           ref={inputRef}
           type="file"
-          accept="image/*,video/*"
+          accept={path === "ai-photo" ? "image/*" : "image/*,video/*"}
           className="hidden"
           onChange={(e) => applyFile(e.target.files?.[0] ?? null)}
         />
         <Upload className="mx-auto h-10 w-10 text-white/35" />
         <p className="mt-3 font-semibold text-white">Tap or drop media</p>
         <p className="mt-1 text-sm text-white/45">
-          {path === "ai-post" ? "Optional — skip if you generated with Veo above." : "MP4, MOV, WebM, PNG, JPG"}
+          {path === "ai-photo"
+            ? "Optional — PNG, JPG, WebP if you already have a still."
+            : path === "ai-post"
+              ? "Optional — skip if you generated with Veo above."
+              : "MP4, MOV, WebM, PNG, JPG"}
         </p>
       </button>
 
@@ -638,7 +788,7 @@ function UploadCapture({
         <GlowButton
           type="button"
           className="flex-1"
-          disabled={!canContinue}
+          disabled={!effectiveCanContinue}
           onClick={() => {
             if (path === "concept-drop" && !sessionMediaUrl) {
               setDraft((d) => ({ ...d, mediaType: "image", isConceptDrop: true }));

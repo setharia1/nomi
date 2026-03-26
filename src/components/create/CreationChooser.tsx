@@ -6,6 +6,7 @@ import {
   Clapperboard,
   Droplets,
   FileUp,
+  Image as ImageIcon,
   Layers,
   Sparkles,
   ChevronRight,
@@ -37,6 +38,13 @@ const modes: {
     accent: "from-violet-500/25 to-fuchsia-600/10 border-violet-400/28",
   },
   {
+    path: "ai-photo",
+    title: "AI Photo",
+    subtitle: "Prompt Imagen stills for the AI Photos feed — then caption and publish.",
+    icon: ImageIcon,
+    accent: "from-fuchsia-600/30 to-amber-500/15 border-fuchsia-400/35",
+  },
+  {
     path: "ai-post",
     title: "AI Post",
     subtitle: "Prompt + Google Veo video, or upload — then compose & publish.",
@@ -53,8 +61,8 @@ const modes: {
 ];
 
 const pathShortcuts = [
+  { label: "AI photo", path: "ai-photo" as CreationPath },
   { label: "AI video", path: "ai-post" as CreationPath },
-  { label: "Share prompt", path: "ai-post" as CreationPath },
   { label: "Concept", path: "concept-drop" as CreationPath },
   { label: "Record now", path: "record" as CreationPath },
 ];
