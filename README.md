@@ -51,8 +51,9 @@ Add these for **Production** (and **Preview** if you want previews to generate /
 |----------|----------|---------|
 | `GOOGLE_GENERATIVE_AI_API_KEY` | **Yes** | Gemini + Veo from [Google AI Studio](https://aistudio.google.com/apikey). Same as local `.env.local` — server-only, never `NEXT_PUBLIC_`. |
 | `BLOB_READ_WRITE_TOKEN` | Strongly recommended | [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) — public URLs for posted videos/images so the **global feed** and other users can load your media. Create a Blob store in the Vercel project and add the **read/write** token. |
-| `UPSTASH_REDIS_REST_URL` | Strongly recommended | Account data, posts, sessions, follows persist across serverless instances and cold starts. Without Redis, the app uses in-memory storage on Vercel (data resets). |
-| `UPSTASH_REDIS_REST_TOKEN` | Strongly recommended | Paired with the URL above ([Upstash](https://upstash.com/) → create Redis → REST API). |
+| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Strongly recommended | From [Upstash](https://upstash.com/) Redis → **REST API** tab (`https://…` + token). |
+| **`UPSTASH_REDIS_URL`** (alternative) | Same | Paste **one** `redis://default:TOKEN@host:6379` string from Upstash (CLI / connect). Nomi derives REST `https://host` + token automatically. |
+| `REDIS_URL` | Same | Alias of the single-line Redis URL if you prefer that name. |
 
 Optional (see [.env.example](.env.example)): `GEMINI_MODEL`, `VEO_MODEL`, `VEO_GENERATE_AUDIO`, `VEO_VIDEO_DURATION_SECONDS`, `VEO_VIDEO_RESOLUTION`, `VEO_VIDEO_COMPRESSION`.
 

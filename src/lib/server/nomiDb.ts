@@ -17,11 +17,46 @@ function emptyDb(): NomiDb {
   };
 }
 
+/**
+ * Upstash REST API expects `https://<host>` + token. Many dashboards only show one `redis://` line —
+ * we accept that in UPSTASH_REDIS_URL or REDIS_URL so you can paste a single value in Vercel.
+ */
+function resolveUpstashRestConfig(): { url: string; token: string } | null {
+  let url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  let token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  if (url && token) return { url, token };
+
+  const conn =
+    process.env.UPSTASH_REDIS_URL?.trim() ||
+    process.env.REDIS_URL?.trim() ||
+    "";
+  if (!conn.startsWith("redis://") && !conn.startsWith("rediss://")) return null;
+
+  const withoutScheme = conn.replace(/^rediss?:\/\//, "");
+  const at = withoutScheme.indexOf("@");
+  if (at < 0) return null;
+  const auth = withoutScheme.slice(0, at);
+  const hostPort = withoutScheme.slice(at + 1);
+  const host = hostPort.split(/[/:?#]/)[0]?.trim();
+  if (!host) return null;
+
+  const tokenPart = auth.includes(":") ? auth.split(":").slice(1).join(":") : auth;
+  if (!tokenPart) return null;
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(tokenPart);
+    } catch {
+      return tokenPart;
+    }
+  })();
+
+  return { url: `https://${host}`, token: decoded };
+}
+
 function getRedis(): Redis | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  return new Redis({ url, token });
+  const resolved = resolveUpstashRestConfig();
+  if (!resolved) return null;
+  return new Redis({ url: resolved.url, token: resolved.token });
 }
 
 const redis = getRedis();
