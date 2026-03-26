@@ -49,4 +49,12 @@ Optional (see [.env.example](.env.example)): `GEMINI_MODEL`, `VEO_MODEL`, `VEO_G
 
 After changing variables, trigger a **redeploy** (Deployments → ⋮ → Redeploy) so new values load.
 
+From a machine where you’re logged into Vercel (`npx vercel login`) and the repo is linked (`npx vercel link` once), you can push values from `.env.local` to the linked project:
+
+```bash
+npm run vercel:env
+```
+
+(Add `UPSTASH_*` to `.env.local` first if you use Redis; empty keys are skipped.)
+
 The easiest way to deploy is the [Vercel](https://vercel.com/new) import from GitHub flow. See [Next.js on Vercel](https://nextjs.org/docs/app/building-your-application/deploying) for more.
