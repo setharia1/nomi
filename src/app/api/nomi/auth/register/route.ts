@@ -9,6 +9,11 @@ import {
 import { hashPassword, makeSalt } from "@/lib/server/authPassword";
 import type { AccountRecord } from "@/lib/server/nomiTypes";
 import { stripAccount } from "@/lib/server/nomiTypes";
+import {
+  MAX_DISPLAY_NAME_LENGTH,
+  MAX_EMAIL_LENGTH,
+  MAX_PASSWORD_BYTES,
+} from "@/lib/server/authLimits";
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const SESSION_MS = 1000 * 60 * 60 * 24 * 30;
@@ -52,8 +57,14 @@ export async function POST(req: Request) {
   if (!email.includes("@")) {
     return NextResponse.json({ error: "Valid email required" }, { status: 400 });
   }
+  if (email.length > MAX_EMAIL_LENGTH) {
+    return NextResponse.json({ error: "Email too long" }, { status: 400 });
+  }
   if (password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+  }
+  if (password.length > MAX_PASSWORD_BYTES) {
+    return NextResponse.json({ error: "Password too long" }, { status: 400 });
   }
   if (!USERNAME_RE.test(username)) {
     return NextResponse.json(
@@ -63,6 +74,9 @@ export async function POST(req: Request) {
   }
   if (!displayName || displayName.length < 1) {
     return NextResponse.json({ error: "Display name required" }, { status: 400 });
+  }
+  if (displayName.length > MAX_DISPLAY_NAME_LENGTH) {
+    return NextResponse.json({ error: "Display name too long" }, { status: 400 });
   }
 
   const db = await loadNomiDb();

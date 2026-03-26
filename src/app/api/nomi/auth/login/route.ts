@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/nomiDb";
 import { verifyPassword } from "@/lib/server/authPassword";
 import { stripAccount } from "@/lib/server/nomiTypes";
+import { MAX_LOGIN_IDENTIFIER_LENGTH, MAX_PASSWORD_BYTES } from "@/lib/server/authLimits";
 
 const SESSION_MS = 1000 * 60 * 60 * 24 * 30;
 
@@ -34,6 +35,9 @@ export async function POST(req: Request) {
 
   if (!emailOrUsername || !password) {
     return NextResponse.json({ error: "Email/username and password required" }, { status: 400 });
+  }
+  if (emailOrUsername.length > MAX_LOGIN_IDENTIFIER_LENGTH || password.length > MAX_PASSWORD_BYTES) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 400 });
   }
 
   const db = await loadNomiDb();
