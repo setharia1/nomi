@@ -66,6 +66,22 @@ export function isNomiRedisConfigured(): boolean {
   return redis !== null;
 }
 
+/**
+ * Error body for /api/nomi/auth/* when Vercel runs without Redis (each instance has isolated memory).
+ */
+export const NOMI_VERCEL_REDIS_REQUIRED_ERROR =
+  "This deployment cannot save accounts: Upstash Redis is not set. In Vercel → your project → Settings → Environment Variables, add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (or paste UPSTASH_REDIS_URL from Upstash), then redeploy. Without Redis, sign-ups and logins are lost on the next request.";
+
+/**
+ * On Vercel, in-memory `saveNomiDb` is not shared across instances or cold starts — users appear
+ * logged out after refresh and login says “no account”. Require Redis unless explicitly overridden.
+ */
+export function mustBlockVercelAuthWithoutRedis(): boolean {
+  if (process.env.NOMI_ALLOW_EPHEMERAL_AUTH === "1") return false;
+  if (isNomiRedisConfigured()) return false;
+  return Boolean(process.env.VERCEL);
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var __nomiDbMem: NomiDb | undefined;

@@ -78,9 +78,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ emailOrUsername, password }),
     });
-    const data = await r.json();
+    let data: { error?: unknown } = {};
+    try {
+      data = await r.json();
+    } catch {
+      data = {};
+    }
     if (!r.ok) {
-      return { error: typeof data.error === "string" ? data.error : "Login failed" };
+      const msg =
+        typeof data.error === "string"
+          ? data.error
+          : r.status === 503
+            ? "Server misconfigured or unavailable — check /api/nomi/health"
+            : "Login failed";
+      return { error: msg };
     }
     const { token, account } = data as { token: string; account: AccountPublic };
     await get().setSession(token, account);
@@ -93,9 +104,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
-    const data = await r.json();
+    let data: { error?: unknown } = {};
+    try {
+      data = await r.json();
+    } catch {
+      data = {};
+    }
     if (!r.ok) {
-      return { error: typeof data.error === "string" ? data.error : "Sign up failed" };
+      const msg =
+        typeof data.error === "string"
+          ? data.error
+          : r.status === 503
+            ? "Server misconfigured or unavailable — check /api/nomi/health"
+            : "Sign up failed";
+      return { error: msg };
     }
     const { token, account } = data as { token: string; account: AccountPublic };
     await get().setSession(token, account);

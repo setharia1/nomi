@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { loadNomiDb, saveNomiDb } from "@/lib/server/nomiDb";
+import {
+  loadNomiDb,
+  mustBlockVercelAuthWithoutRedis,
+  NOMI_VERCEL_REDIS_REQUIRED_ERROR,
+  saveNomiDb,
+} from "@/lib/server/nomiDb";
 import { verifyPassword } from "@/lib/server/authPassword";
 import { stripAccount } from "@/lib/server/nomiTypes";
 
 const SESSION_MS = 1000 * 60 * 60 * 24 * 30;
 
 export async function POST(req: Request) {
+  if (mustBlockVercelAuthWithoutRedis()) {
+    return NextResponse.json({ error: NOMI_VERCEL_REDIS_REQUIRED_ERROR }, { status: 503 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();

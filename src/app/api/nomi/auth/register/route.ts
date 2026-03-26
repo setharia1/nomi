@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { loadNomiDb, saveNomiDb } from "@/lib/server/nomiDb";
+import {
+  loadNomiDb,
+  mustBlockVercelAuthWithoutRedis,
+  NOMI_VERCEL_REDIS_REQUIRED_ERROR,
+  saveNomiDb,
+} from "@/lib/server/nomiDb";
 import { hashPassword, makeSalt } from "@/lib/server/authPassword";
 import type { AccountRecord } from "@/lib/server/nomiTypes";
 import { stripAccount } from "@/lib/server/nomiTypes";
@@ -14,6 +19,10 @@ function defaultAvatar(seed: string): string {
 }
 
 export async function POST(req: Request) {
+  if (mustBlockVercelAuthWithoutRedis()) {
+    return NextResponse.json({ error: NOMI_VERCEL_REDIS_REQUIRED_ERROR }, { status: 503 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
