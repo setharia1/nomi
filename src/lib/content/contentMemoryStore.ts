@@ -9,6 +9,7 @@ import { useAuthStore } from "@/lib/auth/authStore";
 import { ensurePostReachableMedia } from "@/lib/media/blobClientUpload";
 
 const KEY = "nomi-user-posts-v1";
+const PREPARE_MEDIA_TIMEOUT_MS = 20_000;
 
 function loadFromDisk(): Post[] {
   if (typeof window === "undefined") return [];
@@ -37,6 +38,22 @@ function persistToDisk(next: Post[]) {
   } catch {
     /* quota */
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 function mergeAll(seed: Post[], network: Post[], user: Post[]): Post[] {
@@ -80,18 +97,40 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
     const token = useAuthStore.getState().token;
     const account = useAuthStore.getState().account;
 
-    let toSave = stamped;
-    if (token && account?.id) {
-      toSave = await ensurePostReachableMedia(stamped, account.id, token);
+    const upsertLocal = (nextPost: Post) => {
+      const rest = get().userPosts.filter((p) => p.id !== nextPost.id);
+      const nextLocal = [nextPost, ...rest];
+      set({ userPosts: nextLocal });
+      persistToDisk(nextLocal);
+    };
+
+    // Always complete publish immediately in UI. Network/media sync runs in background.
+    upsertLocal(stamped);
+
+    if (!token || !account?.id) {
+      return;
     }
 
-    const rest = get().userPosts.filter((p) => p.id !== toSave.id);
-    const nextLocal = [toSave, ...rest];
-    set({ userPosts: nextLocal });
-    persistToDisk(nextLocal);
-
-    if (token) {
+    void (async () => {
+      let toSave = stamped;
       try {
+        toSave = await withTimeout(
+          ensurePostReachableMedia(stamped, account.id, token),
+          PREPARE_MEDIA_TIMEOUT_MS,
+          "Preparing post media",
+        );
+      } catch {
+        // Keep optimistic post if media prep is slow/unavailable.
+        toSave = stamped;
+      }
+
+      if (toSave.id !== stamped.id || toSave.imageUrl !== stamped.imageUrl || toSave.videoUrl !== stamped.videoUrl) {
+        upsertLocal(toSave);
+      }
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15_000);
         const res = await fetch("/api/nomi/posts", {
           method: "POST",
           headers: {
@@ -99,23 +138,22 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
             "Content-Type": "application/json",
           },
           body: JSON.stringify(toSave),
-        });
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeoutId));
         if (res.ok) {
           const data = (await res.json()) as { posts?: Post[] };
           const list = data.posts ?? [];
           const saved = list.find((p) => p.id === toSave.id);
           if (saved) {
-            const restAfter = get().userPosts.filter((p) => p.id !== saved.id);
-            const merged = [saved, ...restAfter];
-            set({ userPosts: merged });
-            persistToDisk(merged);
+            upsertLocal(saved);
           }
         }
       } catch {
         /* offline */
       }
+
       void useFeedCatalogStore.getState().hydrate();
-    }
+    })();
   },
 
   removeUserPost: (id) => {

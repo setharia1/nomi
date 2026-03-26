@@ -8,6 +8,7 @@ import type {
   Signal,
   ThreadPreview,
 } from "./types";
+import { safeDecodeURIComponent } from "@/lib/url/safeDecode";
 
 const unsplash = (id: string, w = 800, h = 1000) =>
   `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&h=${h}&q=80`;
@@ -47,7 +48,7 @@ export function getCreatorById(id: string) {
 
 export function getCreatorByUsername(username: string) {
   return creators.find(
-    (c) => c.username.toLowerCase() === decodeURIComponent(username).toLowerCase(),
+    (c) => c.username.toLowerCase() === safeDecodeURIComponent(username).toLowerCase(),
   );
 }
 
