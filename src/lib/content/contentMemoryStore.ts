@@ -9,6 +9,7 @@ import { useAuthStore } from "@/lib/auth/authStore";
 import { ensurePostReachableMedia } from "@/lib/media/blobClientUpload";
 
 const KEY = "nomi-user-posts-v1";
+const PREPARE_MEDIA_TIMEOUT_MS = 20_000;
 
 function loadFromDisk(): Post[] {
   if (typeof window === "undefined") return [];
@@ -37,6 +38,22 @@ function persistToDisk(next: Post[]) {
   } catch {
     /* quota */
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 function mergeAll(seed: Post[], network: Post[], user: Post[]): Post[] {
@@ -82,7 +99,16 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
 
     let toSave = stamped;
     if (token && account?.id) {
-      toSave = await ensurePostReachableMedia(stamped, account.id, token);
+      try {
+        toSave = await withTimeout(
+          ensurePostReachableMedia(stamped, account.id, token),
+          PREPARE_MEDIA_TIMEOUT_MS,
+          "Preparing post media",
+        );
+      } catch {
+        // Do not block publish forever when media upload/prep is slow.
+        toSave = stamped;
+      }
     }
 
     const rest = get().userPosts.filter((p) => p.id !== toSave.id);

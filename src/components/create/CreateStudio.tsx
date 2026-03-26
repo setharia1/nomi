@@ -31,6 +31,22 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function resumePhase(d: PostDraft): StudioPhase {
   const sp = d.phase;
   if (sp === "capture" || sp === "compose" || sp === "preview") return sp;
@@ -61,6 +77,7 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
   const [sessionFile, setSessionFile] = useState<File | null>(null);
   const [draftCount, setDraftCount] = useState(() => loadDrafts().length);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishNonce, setPublishNonce] = useState(0);
 
   const resetFlow = useCallback(() => {
     if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
@@ -127,13 +144,19 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
   }, [draft, path, phase, sessionFile, sessionMime]);
 
   const runPublish = useCallback(async () => {
+    const nextNonce = Date.now();
+    setPublishNonce(nextNonce);
     setPublishError(null);
     setPhase("publishing");
     await new Promise((r) => setTimeout(r, 1300));
     try {
       let posterDataUrl: string | null = null;
       if (draft.mediaType === "video" && sessionMediaUrl) {
-        posterDataUrl = await captureVideoPosterDataUrl(sessionMediaUrl);
+        posterDataUrl = await withTimeout(
+          captureVideoPosterDataUrl(sessionMediaUrl),
+          8_000,
+          "Poster extraction",
+        );
       }
       const published = buildPostFromDraft({
         draft,
@@ -141,7 +164,11 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
         creatorId: requireMeId(),
         posterDataUrl,
       });
-      await useContentMemoryStore.getState().publishPost(published);
+      await withTimeout(
+        useContentMemoryStore.getState().publishPost(published),
+        45_000,
+        "Publishing",
+      );
       if (draftId) deleteDraft(draftId);
       if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
       setSessionMediaUrl(null);
@@ -153,6 +180,17 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
       setPhase("preview");
     }
   }, [draft, draftId, sessionMediaUrl]);
+
+  useEffect(() => {
+    if (phase !== "publishing") return;
+    const myNonce = publishNonce;
+    const timer = setTimeout(() => {
+      if (myNonce !== publishNonce) return;
+      setPublishError("Publishing took too long. Check connection and try again.");
+      setPhase("preview");
+    }, 50_000);
+    return () => clearTimeout(timer);
+  }, [phase, publishNonce]);
 
   const transition = {
     initial: { opacity: 0, y: 10, filter: "blur(6px)" },
