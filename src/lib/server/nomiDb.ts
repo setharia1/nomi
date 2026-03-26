@@ -22,8 +22,8 @@ function emptyDb(): NomiDb {
  * we accept that in UPSTASH_REDIS_URL or REDIS_URL so you can paste a single value in Vercel.
  */
 function resolveUpstashRestConfig(): { url: string; token: string } | null {
-  let url = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  let token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
   if (url && token) return { url, token };
 
   const conn =
@@ -61,6 +61,16 @@ function getRedis(): Redis | null {
 
 const redis = getRedis();
 
+/**
+ * Durable JSON at `data/nomi-cloud.json` — any machine with a normal writable filesystem
+ * (local `next dev`, `next start`, self‑hosted Node) except Vercel (no shared disk).
+ */
+function nomiDbUsesLocalJsonFile(): boolean {
+  if (redis) return false;
+  if (process.env.VERCEL) return false;
+  return true;
+}
+
 /** True when Upstash / REST env is configured (production persistence). */
 export function isNomiRedisConfigured(): boolean {
   return redis !== null;
@@ -83,7 +93,6 @@ export function mustBlockVercelAuthWithoutRedis(): boolean {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __nomiDbMem: NomiDb | undefined;
 }
 
@@ -92,11 +101,10 @@ function getMemoryDb(): NomiDb {
   return globalThis.__nomiDbMem;
 }
 
-async function readFileDb(): Promise<NomiDb> {
-  const fp = path.join(process.cwd(), ...FILE_REL);
+function parseNomiDbBlob(raw: unknown): NomiDb {
   try {
-    const raw = await fs.readFile(fp, "utf8");
-    const parsed = JSON.parse(raw) as NomiDb;
+    const parsed =
+      typeof raw === "string" ? (JSON.parse(raw) as NomiDb) : (raw as NomiDb);
     if (!parsed || typeof parsed !== "object") return emptyDb();
     return {
       ...emptyDb(),
@@ -113,8 +121,18 @@ async function readFileDb(): Promise<NomiDb> {
   }
 }
 
+async function readFileDb(): Promise<NomiDb> {
+  const fp = path.join(/* turbopackIgnore: true */ process.cwd(), ...FILE_REL);
+  try {
+    const raw = await fs.readFile(fp, "utf8");
+    return parseNomiDbBlob(raw);
+  } catch {
+    return emptyDb();
+  }
+}
+
 async function writeFileDb(db: NomiDb) {
-  const fp = path.join(process.cwd(), ...FILE_REL);
+  const fp = path.join(/* turbopackIgnore: true */ process.cwd(), ...FILE_REL);
   await fs.mkdir(path.dirname(fp), { recursive: true });
   await fs.writeFile(fp, JSON.stringify(db), "utf8");
 }
@@ -134,15 +152,11 @@ function warnEphemeralProduction(context: "load" | "save") {
 
 export async function loadNomiDb(): Promise<NomiDb> {
   if (redis) {
-    const raw = await redis.get<string>(REDIS_KEY);
-    if (!raw) return emptyDb();
-    try {
-      return JSON.parse(raw) as NomiDb;
-    } catch {
-      return emptyDb();
-    }
+    const raw = await redis.get(REDIS_KEY);
+    if (raw == null || raw === "") return emptyDb();
+    return parseNomiDbBlob(raw);
   }
-  if (process.env.NODE_ENV === "development") {
+  if (nomiDbUsesLocalJsonFile()) {
     return readFileDb();
   }
   warnEphemeralProduction("load");
@@ -154,7 +168,7 @@ export async function saveNomiDb(db: NomiDb) {
     await redis.set(REDIS_KEY, JSON.stringify(db));
     return;
   }
-  if (process.env.NODE_ENV === "development") {
+  if (nomiDbUsesLocalJsonFile()) {
     await writeFileDb(db);
     return;
   }

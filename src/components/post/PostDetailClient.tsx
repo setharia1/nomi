@@ -13,7 +13,9 @@ import { RemixModal } from "@/components/modals/RemixModal";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { PostCard } from "@/components/feed/PostCard";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
-import { selectAllPostsMerged, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { mergePostsForFeed, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
+import { posts as seedPosts } from "@/lib/mock-data";
 import type { Post } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { ShareSheet } from "@/components/interactions/ShareSheet";
@@ -27,6 +29,7 @@ export function PostDetailClient({ post }: { post: Post }) {
   const creator = getCreatorByIdResolved(post.creatorId)!;
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPostsBump = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   useEffect(() => {
     hydrate();
@@ -41,7 +44,10 @@ export function PostDetailClient({ post }: { post: Post }) {
     return () => clearTimeout(t);
   }, [post.id]);
 
-  const merged = useMemo(() => selectAllPostsMerged(), [userPostsBump]);
+  const merged = useMemo(
+    () => mergePostsForFeed(seedPosts, catalogPosts, userPostsBump),
+    [userPostsBump, catalogPosts],
+  );
   const related = useMemo(
     () => merged.filter((p) => p.id !== post.id && p.category === post.category).slice(0, 3),
     [merged, post.id, post.category],

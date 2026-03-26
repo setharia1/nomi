@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { creators, notifications as seedNotifications } from "@/lib/mock-data";
+import { notifications as seedNotifications } from "@/lib/mock-data";
 import { selectPostByIdMerged } from "@/lib/content/contentMemoryStore";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 import type { NotificationItem } from "@/lib/types";

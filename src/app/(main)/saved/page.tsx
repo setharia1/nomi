@@ -7,14 +7,15 @@ import { motion } from "framer-motion";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { GlowButton } from "@/components/ui/GlowButton";
 import type { Creator, MoodBoard, Post } from "@/lib/types";
-import { creators } from "@/lib/mock-data";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 import { useInteractionsStore } from "@/lib/interactions/store";
-import { selectPostByIdMerged, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { findMergedPostById, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 
 export default function SavedPage() {
   const hydrateContent = useContentMemoryStore((s) => s.hydrate);
   const userPostsBump = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   useEffect(() => {
     hydrateContent();
@@ -29,9 +30,9 @@ export default function SavedPage() {
   const savedPosts = useMemo(
     () =>
       savedPostIds
-        .map((id) => selectPostByIdMerged(id))
+        .map((id) => findMergedPostById(id, catalogPosts, userPostsBump))
         .filter((p): p is Post => Boolean(p)),
-    [savedPostIds, userPostsBump],
+    [savedPostIds, userPostsBump, catalogPosts],
   );
   const savedCreators = useMemo(
     () => savedCreatorIds.map((id) => getCreatorByIdResolved(id)).filter(Boolean) as Creator[],

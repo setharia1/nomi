@@ -31,6 +31,8 @@ export function ProfilePageClient() {
   );
 
   const localCreator = useMemo(() => {
+    void profileEpoch;
+    void registryKey;
     if (typeof window === "undefined") return null;
     return resolveProfileCreator(username);
   }, [username, profileEpoch, registryKey]);

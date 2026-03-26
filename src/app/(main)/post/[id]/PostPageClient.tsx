@@ -3,17 +3,22 @@
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { PostDetailClient } from "@/components/post/PostDetailClient";
-import { selectPostByIdMerged, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { findMergedPostById, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 
 export function PostPageClient({ id }: { id: string }) {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
-  const post = useMemo(() => selectPostByIdMerged(id), [id, userPosts]);
+  const post = useMemo(
+    () => findMergedPostById(id, catalogPosts, userPosts),
+    [id, userPosts, catalogPosts],
+  );
 
   if (!post) {
     return (

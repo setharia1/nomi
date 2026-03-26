@@ -16,6 +16,13 @@ export function formatGenAiError(err: unknown): string {
   return "Request failed";
 }
 
+/** Wrong model id / deprecated Imagen name — try next candidate. */
+export function isGenAiModelNotFoundError(err: unknown): boolean {
+  if (err instanceof ApiError && err.status === 404) return true;
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return msg.includes("not found") && msg.includes("models/");
+}
+
 export function requireGeminiApiKey(): string {
   const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!key?.trim()) {

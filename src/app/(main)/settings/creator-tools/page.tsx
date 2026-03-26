@@ -11,7 +11,8 @@ import { ArrowRight, Layers, Sparkles, TrendingUp } from "lucide-react";
 import type { Post } from "@/lib/types";
 import { useEffect, useMemo, type ComponentType } from "react";
 import { useInteractionsStore } from "@/lib/interactions/store";
-import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { mergePostsForFeed, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { useDraftsStore } from "@/lib/create/draftsStore";
 import { useVideoJobsStore } from "@/lib/generation/videoJobsStore";
 
@@ -23,9 +24,10 @@ export default function CreatorToolsPage() {
   const me = creators[0]!;
   const hydrateContent = useContentMemoryStore((s) => s.hydrate);
   const userPostsBump = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
   const mergedPosts = useMemo(
-    () => useContentMemoryStore.getState().mergeWithSeed(seedPosts),
-    [userPostsBump],
+    () => mergePostsForFeed(seedPosts, catalogPosts, userPostsBump),
+    [userPostsBump, catalogPosts],
   );
   const myPosts = useMemo(
     () => mergedPosts.filter((p) => p.creatorId === me.id),
@@ -53,6 +55,7 @@ export default function CreatorToolsPage() {
   const myFollowerCount = useInteractionsStore((s) => s.getFollowerCount(me.id));
 
   const analytics = useMemo(() => {
+    void viewBonusVersion;
     const getBonus = usePostViewsStore.getState().getBonus;
     const totalViews = myPosts.reduce(
       (acc, p) => acc + getTotalPostViews(p, getBonus(p.id)),

@@ -9,15 +9,16 @@ import { cn } from "@/lib/cn";
 import type { Creator, MoodBoard, Post } from "@/lib/types";
 import { Archive, Bookmark, Heart, Layers, Sparkles, Trash2, Clapperboard } from "lucide-react";
 import { loadArchivedPostIds, saveArchivedPostIds } from "@/lib/profile/archiveStorage";
-import { feedTabLabels } from "@/lib/mock-data";
+import { feedTabLabels, posts as seedPosts } from "@/lib/mock-data";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 import {
-  selectAllPostsMerged,
-  selectPostByIdMerged,
-  selectPostsForCreatorMerged,
+  findMergedPostById,
+  mergePostsForFeed,
+  selectPostsForCreatorFromMerged,
   selectPostsForCreatorSeed,
   useContentMemoryStore,
 } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { useDraftsStore } from "@/lib/create/draftsStore";
 import { useVideoJobsStore } from "@/lib/generation/videoJobsStore";
 import { MoodBoardCard } from "@/components/collections/MoodBoardCard";
@@ -71,6 +72,7 @@ export function ProfileTabs({
 
   const hydrateContent = useContentMemoryStore((s) => s.hydrate);
   const userPostsBump = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   const [archivedPostIds, setArchivedPostIds] = useState<string[]>([]);
   /** After sync, use merged posts + real archive ids so client matches SSR first paint. */
@@ -87,9 +89,13 @@ export function ProfileTabs({
     return () => window.removeEventListener("nomi-archive-changed", syncArchive);
   }, [hydrateContent]);
 
+  const mergedAll = useMemo(
+    () => mergePostsForFeed(seedPosts, catalogPosts, userPostsBump),
+    [catalogPosts, userPostsBump],
+  );
   const mergedCreatorPosts = useMemo(
-    () => selectPostsForCreatorMerged(creator.id),
-    [creator.id, userPostsBump],
+    () => selectPostsForCreatorFromMerged(mergedAll, creator.id, userPostsBump),
+    [mergedAll, creator.id, userPostsBump],
   );
   const seedCreatorPosts = useMemo(() => selectPostsForCreatorSeed(creator.id), [creator.id]);
   const posts = tabsContentSynced ? mergedCreatorPosts : seedCreatorPosts;
@@ -118,10 +124,9 @@ export function ProfileTabs({
     [videoJobs],
   );
 
-  const allMerged = useMemo(() => selectAllPostsMerged(), [userPostsBump]);
   const archivedPosts = useMemo(
-    () => allMerged.filter((p) => archivedPostIds.includes(p.id)),
-    [allMerged, archivedPostIds],
+    () => mergedAll.filter((p) => archivedPostIds.includes(p.id)),
+    [mergedAll, archivedPostIds],
   );
 
   const toggleArchive = (postId: string) => {
@@ -140,9 +145,9 @@ export function ProfileTabs({
   const savedPosts = useMemo(
     () =>
       savedPostIds
-        .map((id) => selectPostByIdMerged(id))
+        .map((id) => findMergedPostById(id, catalogPosts, userPostsBump))
         .filter((p): p is Post => Boolean(p)),
-    [savedPostIds, userPostsBump],
+    [savedPostIds, userPostsBump, catalogPosts],
   );
   const savedBoards = useMemo(() => allBoards.filter((b) => savedMoodBoardIds.includes(b.id)), [allBoards, savedMoodBoardIds]);
 

@@ -13,14 +13,17 @@ import { CreatorLabelChips } from "./CreatorLabelChips";
 import { useInteractionsStore } from "@/lib/interactions/store";
 import { RelationshipListSheet } from "@/components/social/RelationshipListSheet";
 import {
-  selectPostsForCreatorMerged,
+  mergePostsForFeed,
+  selectPostsForCreatorFromMerged,
   selectPostsForCreatorSeed,
   useContentMemoryStore,
 } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { loadArchivedPostIds } from "@/lib/profile/archiveStorage";
 import { isDataUrlAvatar } from "@/lib/profile/avatarUpload";
 import { cloneFollowingGraph, countFollowers } from "@/lib/social/followGraph";
 import { cn } from "@/lib/cn";
+import { posts as seedPosts } from "@/lib/mock-data";
 
 const SEED_FOLLOW_GRAPH = cloneFollowingGraph();
 
@@ -128,6 +131,7 @@ export function ProfileHeader({
 
   const hydrateContent = useContentMemoryStore((s) => s.hydrate);
   const userPostsBump = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   const [archivedIds, setArchivedIds] = useState<string[]>([]);
   /** False until local user posts + archive ids are read — avoids SSR/client hydration mismatch. */
@@ -143,10 +147,11 @@ export function ProfileHeader({
   }, [hydrateContent]);
 
   const livePostCount = useMemo(() => {
-    const all = selectPostsForCreatorMerged(creator.id);
+    const merged = mergePostsForFeed(seedPosts, catalogPosts, userPostsBump);
+    const all = selectPostsForCreatorFromMerged(merged, creator.id, userPostsBump);
     if (!isSelf) return all.length;
     return all.filter((p) => !archivedIds.includes(p.id)).length;
-  }, [creator.id, userPostsBump, isSelf, archivedIds]);
+  }, [creator.id, userPostsBump, catalogPosts, isSelf, archivedIds]);
 
   const seedPostCount = useMemo(() => {
     const seed = selectPostsForCreatorSeed(creator.id);

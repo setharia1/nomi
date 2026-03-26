@@ -96,3 +96,91 @@ export async function ensurePostMediaPublicUrls(
 
   return next;
 }
+
+const FALLBACK_POSTER =
+  "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80";
+
+/** Keep under typical serverless JSON body limits when inlining without Blob. */
+const MAX_BLOB_INLINE_BYTES = 2 * 1024 * 1024;
+const MAX_DATA_URL_BYTES = 2 * 1024 * 1024;
+
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(fr.error ?? new Error("read failed"));
+    fr.readAsDataURL(blob);
+  });
+}
+
+function approxDataUrlByteLength(dataUrl: string): number {
+  const m = dataUrl.match(/^data:[^;,]+;base64,(.+)$/i);
+  if (m) return Math.floor((m[1].length * 3) / 4);
+  const i = dataUrl.indexOf(",");
+  if (i < 0 || !dataUrl.startsWith("data:")) return 0;
+  try {
+    return new TextEncoder().encode(decodeURIComponent(dataUrl.slice(i + 1))).length;
+  } catch {
+    return dataUrl.length;
+  }
+}
+
+async function inlineBlobUrlsInPost(post: Post): Promise<Post> {
+  let next = { ...post };
+
+  const one = async (url: string | undefined): Promise<string | undefined> => {
+    if (!url?.startsWith("blob:")) return url;
+    try {
+      const r = await fetch(url);
+      const blob = await r.blob();
+      if (blob.size > MAX_BLOB_INLINE_BYTES) return url;
+      return await readBlobAsDataUrl(blob);
+    } catch {
+      return url;
+    }
+  };
+
+  const v = await one(next.videoUrl);
+  if (v !== next.videoUrl) next = { ...next, videoUrl: v };
+  const img = await one(next.imageUrl);
+  if (img !== undefined && img !== next.imageUrl) next = { ...next, imageUrl: img };
+
+  return next;
+}
+
+function stripMediaUnusableForSharedFeed(post: Post): Post {
+  let next = { ...post };
+  if (next.videoUrl?.startsWith("blob:")) next = { ...next, videoUrl: undefined };
+  if (next.imageUrl?.startsWith("blob:")) next = { ...next, imageUrl: FALLBACK_POSTER };
+  if (next.videoUrl?.startsWith("data:") && approxDataUrlByteLength(next.videoUrl) > MAX_DATA_URL_BYTES) {
+    next = { ...next, videoUrl: undefined };
+  }
+  if (next.imageUrl?.startsWith("data:") && approxDataUrlByteLength(next.imageUrl) > MAX_DATA_URL_BYTES) {
+    next = { ...next, imageUrl: FALLBACK_POSTER };
+  }
+  return next;
+}
+
+/**
+ * Prepare a post for `POST /api/nomi/posts`: public Blob URLs when configured, otherwise inline small
+ * `blob:` media as `data:` so the shared DB does not store origin-local URLs other clients cannot load.
+ */
+export async function ensurePostReachableMedia(
+  post: Post,
+  accountId: string,
+  bearerToken: string,
+): Promise<Post> {
+  let next = { ...post };
+  if (postNeedsPublicMediaUpload(next)) {
+    try {
+      next = await ensurePostMediaPublicUrls(next, accountId, bearerToken);
+    } catch {
+      /* e.g. BLOB_READ_WRITE_TOKEN missing */
+    }
+  }
+  if (postNeedsPublicMediaUpload(next)) {
+    next = await inlineBlobUrlsInPost(next);
+  }
+  next = stripMediaUnusableForSharedFeed(next);
+  return next;
+}

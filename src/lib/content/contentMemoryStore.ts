@@ -6,10 +6,7 @@ import type { PostDraft } from "@/lib/create/types";
 import { posts as seedPosts } from "@/lib/mock-data";
 import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { useAuthStore } from "@/lib/auth/authStore";
-import {
-  ensurePostMediaPublicUrls,
-  postNeedsPublicMediaUpload,
-} from "@/lib/media/blobClientUpload";
+import { ensurePostReachableMedia } from "@/lib/media/blobClientUpload";
 
 const KEY = "nomi-user-posts-v1";
 
@@ -50,6 +47,15 @@ function mergeAll(seed: Post[], network: Post[], user: Post[]): Post[] {
   return Array.from(byId.values());
 }
 
+/** Use in `useMemo` with `[catalogPosts, userPosts]` so feeds update when the server catalog hydrates. */
+export function mergePostsForFeed(seed: Post[], catalogPosts: Post[], userPosts: Post[]): Post[] {
+  return mergeAll(seed, catalogPosts, userPosts);
+}
+
+export function findMergedPostById(id: string, catalogPosts: Post[], userPosts: Post[]): Post | undefined {
+  return mergePostsForFeed(seedPosts, catalogPosts, userPosts).find((p) => p.id === id);
+}
+
 type ContentMemoryState = {
   hydrated: boolean;
   userPosts: Post[];
@@ -75,12 +81,8 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
     const account = useAuthStore.getState().account;
 
     let toSave = stamped;
-    if (token && account?.id && postNeedsPublicMediaUpload(stamped)) {
-      try {
-        toSave = await ensurePostMediaPublicUrls(stamped, account.id, token);
-      } catch {
-        /* e.g. BLOB_READ_WRITE_TOKEN missing — fall through and let server / local handle */
-      }
+    if (token && account?.id) {
+      toSave = await ensurePostReachableMedia(stamped, account.id, token);
     }
 
     const rest = get().userPosts.filter((p) => p.id !== toSave.id);
@@ -137,9 +139,8 @@ export function selectAllPostsMerged(): Post[] {
   return useContentMemoryStore.getState().mergeWithSeed(seedPosts);
 }
 
-export function sortPostsForProfileGrid(posts: Post[]): Post[] {
-  const user = useContentMemoryStore.getState().userPosts;
-  const idx = new Map(user.map((p, i) => [p.id, i]));
+function sortPostsWithUserBias(posts: Post[], userPosts: Post[]): Post[] {
+  const idx = new Map(userPosts.map((p, i) => [p.id, i]));
   return posts.slice().sort((a, b) => {
     const ta = a.publishedAt ?? 0;
     const tb = b.publishedAt ?? 0;
@@ -153,6 +154,14 @@ export function sortPostsForProfileGrid(posts: Post[]): Post[] {
   });
 }
 
+export function sortPostsForProfileGrid(posts: Post[]): Post[] {
+  return sortPostsWithUserBias(posts, useContentMemoryStore.getState().userPosts);
+}
+
+export function sortPostsForProfileGridWithUser(posts: Post[], userPosts: Post[]): Post[] {
+  return sortPostsWithUserBias(posts, userPosts);
+}
+
 export function selectPostByIdMerged(id: string): Post | undefined {
   const fromUser = useContentMemoryStore.getState().userPosts.find((p) => p.id === id);
   if (fromUser) return fromUser;
@@ -161,8 +170,19 @@ export function selectPostByIdMerged(id: string): Post | undefined {
   return seedPosts.find((p) => p.id === id);
 }
 
+export function selectPostsForCreatorFromMerged(
+  merged: Post[],
+  creatorId: string,
+  userPosts: Post[],
+): Post[] {
+  return sortPostsWithUserBias(
+    merged.filter((p) => p.creatorId === creatorId),
+    userPosts,
+  );
+}
+
 export function selectPostsForCreatorMerged(creatorId: string): Post[] {
-  return sortPostsForProfileGrid(selectAllPostsMerged().filter((p) => p.creatorId === creatorId));
+  return selectPostsForCreatorFromMerged(selectAllPostsMerged(), creatorId, useContentMemoryStore.getState().userPosts);
 }
 
 export function selectPostsForCreatorSeed(creatorId: string): Post[] {
@@ -176,17 +196,31 @@ export function selectPostsForFeedTabSeed(tab: FeedTab): Post[] {
     .sort((a, b) => b.likes - a.likes);
 }
 
-export function selectHomeFeedPostsSeed(_tab: FeedTab): Post[] {
+export function selectHomeFeedPostsSeed(): Post[] {
   return [];
 }
 
-export function selectForYouPoolMerged(tab: FeedTab): Post[] {
-  return selectAllPostsMerged().filter((p) => p.feedTab === tab);
+export function selectForYouPoolFromMerged(merged: Post[], tab: FeedTab): Post[] {
+  return merged.filter((p) => p.feedTab === tab);
 }
 
-export function selectFollowingPoolMerged(tab: FeedTab, followingCreatorIds: string[]): Post[] {
+export function selectFollowingPoolFromMerged(
+  merged: Post[],
+  tab: FeedTab,
+  followingCreatorIds: string[],
+): Post[] {
   const allow = new Set(followingCreatorIds);
-  return selectAllPostsMerged().filter((p) => p.feedTab === tab && allow.has(p.creatorId));
+  return merged.filter((p) => p.feedTab === tab && allow.has(p.creatorId));
+}
+
+/** @deprecated Prefer selectForYouPoolFromMerged(mergePostsForFeed(...), tab) for correct hook deps */
+export function selectForYouPoolMerged(tab: FeedTab): Post[] {
+  return selectForYouPoolFromMerged(selectAllPostsMerged(), tab);
+}
+
+/** @deprecated Prefer selectFollowingPoolFromMerged(mergePostsForFeed(...), ...) */
+export function selectFollowingPoolMerged(tab: FeedTab, followingCreatorIds: string[]): Post[] {
+  return selectFollowingPoolFromMerged(selectAllPostsMerged(), tab, followingCreatorIds);
 }
 
 export function selectPostsForFeedTabMerged(tab: FeedTab): Post[] {

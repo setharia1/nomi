@@ -28,6 +28,8 @@ export function accountToCreator(a: AccountPublic): Creator {
 }
 
 export function stripAccount(a: AccountRecord): AccountPublic {
-  const { passwordHash: _h, salt: _s, ...pub } = a;
+  const { passwordHash, salt, ...pub } = a;
+  void passwordHash;
+  void salt;
   return pub;
 }

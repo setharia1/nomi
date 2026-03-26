@@ -7,8 +7,9 @@ import { FeedScopeBar, type FeedScope } from "./FeedScopeBar";
 import { FeedTabBar } from "./FeedTabBar";
 import { ImmersivePostSlide } from "./ImmersivePostSlide";
 import {
-  selectForYouPoolMerged,
-  selectFollowingPoolMerged,
+  mergePostsForFeed,
+  selectFollowingPoolFromMerged,
+  selectForYouPoolFromMerged,
   selectHomeFeedPostsSeed,
   useContentMemoryStore,
 } from "@/lib/content/contentMemoryStore";
@@ -21,9 +22,11 @@ import { computeFollowerCounts } from "@/lib/social/followGraph";
 import { buildPersonalizationSignals } from "@/lib/search/engine";
 import { feedTabLabels, posts as seedPosts } from "@/lib/mock-data";
 import { buildForYouStream, sortFollowingFeed } from "@/lib/feed/forYouRanking";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 
 export function HomeImmersiveFeed() {
   const meId = useMeId();
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
   const [scope, setScope] = useState<FeedScope>("for-you");
   const [tab, setTab] = useState<FeedTab>("ai-videos");
   const hydrate = useContentMemoryStore((s) => s.hydrate);
@@ -38,12 +41,15 @@ export function HomeImmersiveFeed() {
   const savedPostIds = useInteractionsStore((s) => s.savedPostIds);
   const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
 
-  const meFollowing = followingByUserId[meId ?? ""] ?? [];
+  const meFollowing = useMemo(
+    () => followingByUserId[meId ?? ""] ?? [],
+    [followingByUserId, meId],
+  );
   const followerCounts = useMemo(() => computeFollowerCounts(followingByUserId), [followingByUserId]);
 
   const mergedPosts = useMemo(
-    () => useContentMemoryStore.getState().mergeWithSeed(seedPosts),
-    [userPosts],
+    () => mergePostsForFeed(seedPosts, catalogPosts, userPosts),
+    [catalogPosts, userPosts],
   );
 
   const sig = useMemo(
@@ -78,22 +84,22 @@ export function HomeImmersiveFeed() {
   useEffect(() => {
     hydrate();
     useFeedPlaybackStore.getState().hydrate();
-    setFeedMergedSynced(true);
+    queueMicrotask(() => setFeedMergedSynced(true));
   }, [hydrate]);
 
   useEffect(() => {
-    setStreamSalt((n) => n + 1);
+    queueMicrotask(() => setStreamSalt((n) => n + 1));
   }, [tab, scope, userPostSignature]);
 
   const list = useMemo(() => {
-    if (!feedMergedSynced) return selectHomeFeedPostsSeed(tab);
+    if (!feedMergedSynced) return selectHomeFeedPostsSeed();
     if (scope === "for-you") {
-      const pool = selectForYouPoolMerged(tab);
+      const pool = selectForYouPoolFromMerged(mergedPosts, tab);
       return buildForYouStream(pool, sig, streamSalt);
     }
-    const pool = selectFollowingPoolMerged(tab, meFollowing);
+    const pool = selectFollowingPoolFromMerged(mergedPosts, tab, meFollowing);
     return sortFollowingFeed(pool);
-  }, [feedMergedSynced, scope, tab, userPosts, meFollowing, sig, streamSalt]);
+  }, [feedMergedSynced, scope, tab, mergedPosts, meFollowing, sig, streamSalt]);
 
   const emptyForYou = scope === "for-you" && list.length === 0;
   const emptyFollowing = scope === "following" && list.length === 0;

@@ -8,11 +8,13 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { feedTabLabels, posts as seedPosts } from "@/lib/mock-data";
 import { loadArchivedPostIds, saveArchivedPostIds } from "@/lib/profile/archiveStorage";
-import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { mergePostsForFeed, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 
 export default function ArchivePage() {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
   const [archivedIds, setArchivedIds] = useState<string[]>(() => loadArchivedPostIds());
 
   useEffect(() => {
@@ -20,9 +22,9 @@ export default function ArchivePage() {
   }, [hydrate]);
 
   const archivedPosts = useMemo(() => {
-    const all = useContentMemoryStore.getState().mergeWithSeed(seedPosts);
+    const all = mergePostsForFeed(seedPosts, catalogPosts, userPosts);
     return all.filter((p) => archivedIds.includes(p.id));
-  }, [archivedIds, userPosts]);
+  }, [archivedIds, userPosts, catalogPosts]);
 
   return (
     <div className="space-y-[var(--nomi-section-gap)] pb-6">

@@ -8,7 +8,12 @@ import { Play } from "lucide-react";
 import { posts as seedPosts } from "@/lib/mock-data";
 import type { ExploreFilter } from "@/lib/mock-data";
 import type { Post } from "@/lib/types";
-import { useContentMemoryStore, sortPostsForProfileGrid } from "@/lib/content/contentMemoryStore";
+import {
+  mergePostsForFeed,
+  sortPostsForProfileGridWithUser,
+  useContentMemoryStore,
+} from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { cn } from "@/lib/cn";
 
 function filterPosts(all: Post[], f: ExploreFilter) {
@@ -26,15 +31,16 @@ function filterPosts(all: Post[], f: ExploreFilter) {
 export function ExploreGrid({ activeFilter }: { activeFilter: ExploreFilter }) {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
   const merged = useMemo(() => {
-    const base = useContentMemoryStore.getState().mergeWithSeed(seedPosts);
-    return sortPostsForProfileGrid(base);
-  }, [userPosts]);
+    const base = mergePostsForFeed(seedPosts, catalogPosts, userPosts);
+    return sortPostsForProfileGridWithUser(base, userPosts);
+  }, [userPosts, catalogPosts]);
 
   const list = useMemo(() => filterPosts(merged, activeFilter), [merged, activeFilter]);
 

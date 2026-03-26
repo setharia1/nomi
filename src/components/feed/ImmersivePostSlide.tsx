@@ -63,13 +63,11 @@ export function ImmersivePostSlide({ post }: { post: Post }) {
   const isFollowingFromSeed = (creatorId: string) => seedMeFollowingIds.includes(creatorId);
 
   const router = useRouter();
-  const registrySig = useAccountRegistryStore((s) => {
-    const c = s.byId[post.creatorId];
-    return c ? `${c.username}\0${c.displayName}\0${c.avatarUrl}` : "";
-  });
+  const registryCreator = useAccountRegistryStore((s) => s.byId[post.creatorId]);
   const creator = useMemo(() => {
+    void registryCreator;
     return getCreatorByIdResolved(post.creatorId) ?? fallbackCreator(post.creatorId);
-  }, [post.creatorId, registrySig]);
+  }, [post.creatorId, registryCreator]);
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const inView = useInView(rootRef, { amount: 0.55 });

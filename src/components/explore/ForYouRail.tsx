@@ -6,17 +6,19 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { posts as seedPosts } from "@/lib/mock-data";
-import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { mergePostsForFeed, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
 import { buildForYouStream } from "@/lib/feed/forYouRanking";
 import { buildPersonalizationSignals } from "@/lib/search/engine";
 import { useMeId } from "@/lib/auth/meId";
 import { useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 
 export function ForYouRail() {
   const meId = useMeId();
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   const intHydrated = useInteractionsStore((s) => s.hydrated);
   const followingByUserId = useInteractionsStore((s) => s.followingByUserId);
@@ -24,7 +26,10 @@ export function ForYouRail() {
   const savedPostIds = useInteractionsStore((s) => s.savedPostIds);
   const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
 
-  const meFollowing = followingByUserId[meId ?? ""] ?? [];
+  const meFollowing = useMemo(
+    () => followingByUserId[meId ?? ""] ?? [],
+    [followingByUserId, meId],
+  );
   const followerCounts = useMemo(() => computeFollowerCounts(followingByUserId), [followingByUserId]);
 
   useEffect(() => {
@@ -32,8 +37,8 @@ export function ForYouRail() {
   }, [hydrate]);
 
   const merged = useMemo(
-    () => useContentMemoryStore.getState().mergeWithSeed(seedPosts),
-    [userPosts],
+    () => mergePostsForFeed(seedPosts, catalogPosts, userPosts),
+    [userPosts, catalogPosts],
   );
 
   const sig = useMemo(
@@ -70,7 +75,7 @@ export function ForYouRail() {
   );
   const [streamSalt, setStreamSalt] = useState(() => Math.floor(Math.random() * 1_000_000_000));
   useEffect(() => {
-    setStreamSalt((n) => n + 1);
+    queueMicrotask(() => setStreamSalt((n) => n + 1));
   }, [mergedKey]);
 
   const list = useMemo(() => {

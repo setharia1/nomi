@@ -9,17 +9,23 @@ import { buildPersonalizationSignals, buildTopicHits } from "@/lib/search/engine
 import type { Creator } from "@/lib/types";
 import { creators, posts as seedPosts } from "@/lib/mock-data";
 import { useAccountRegistryStore } from "@/lib/accounts/registryStore";
-import { useContentMemoryStore, sortPostsForProfileGrid } from "@/lib/content/contentMemoryStore";
+import {
+  mergePostsForFeed,
+  sortPostsForProfileGridWithUser,
+  useContentMemoryStore,
+} from "@/lib/content/contentMemoryStore";
 import { useMeId } from "@/lib/auth/meId";
 import { useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
 import { CURATED_TOPIC_SLUGS } from "@/lib/search/constants";
 import { buildForYouStream } from "@/lib/feed/forYouRanking";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 
 export function ExploreDiscoveryHub() {
   const meId = useMeId();
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
   const registryById = useAccountRegistryStore((s) => s.byId);
 
   const hydrated = useInteractionsStore((s) => s.hydrated);
@@ -33,14 +39,17 @@ export function ExploreDiscoveryHub() {
   }, [hydrate]);
 
   const catalog = useMemo(() => {
-    const merged = useContentMemoryStore.getState().mergeWithSeed(seedPosts);
+    const merged = mergePostsForFeed(seedPosts, catalogPosts, userPosts);
     const byId = new Map<string, Creator>();
     for (const c of creators) byId.set(c.id, c);
     for (const c of Object.values(registryById)) byId.set(c.id, c);
     return { posts: merged, creators: Array.from(byId.values()) };
-  }, [userPosts, registryById]);
+  }, [userPosts, catalogPosts, registryById]);
 
-  const meFollowing = followingByUserId[meId ?? ""] ?? [];
+  const meFollowing = useMemo(
+    () => followingByUserId[meId ?? ""] ?? [],
+    [followingByUserId, meId],
+  );
 
   const sig = useMemo(
     () =>
@@ -67,7 +76,10 @@ export function ExploreDiscoveryHub() {
   );
 
   const topicHits = useMemo(() => buildTopicHits(catalog.posts, catalog.creators), [catalog]);
-  const latest = useMemo(() => sortPostsForProfileGrid(catalog.posts).slice(0, 12), [catalog.posts]);
+  const latest = useMemo(
+    () => sortPostsForProfileGridWithUser(catalog.posts, userPosts).slice(0, 12),
+    [catalog.posts, userPosts],
+  );
   const catalogPostKey = useMemo(
     () =>
       [...catalog.posts]
@@ -78,7 +90,7 @@ export function ExploreDiscoveryHub() {
   );
   const [streamSalt, setStreamSalt] = useState(() => Math.floor(Math.random() * 1_000_000_000));
   useEffect(() => {
-    setStreamSalt((n) => n + 1);
+    queueMicrotask(() => setStreamSalt((n) => n + 1));
   }, [catalogPostKey]);
 
   const forYouExplore = useMemo(() => {

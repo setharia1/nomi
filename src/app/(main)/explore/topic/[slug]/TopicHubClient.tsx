@@ -11,7 +11,8 @@ import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
 import { PageHeader } from "@/components/layout/PageHeader";
 import type { Creator, Post } from "@/lib/types";
 import { buildTopicHits } from "@/lib/search/engine";
-import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { mergePostsForFeed, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 
 function relatedTags(topicPosts: Post[], excludeSlug: string, take = 12) {
   const counts = new Map<string, number>();
@@ -48,18 +49,25 @@ function creatorsForTopic(topicPosts: Post[]) {
 export function TopicHubClient({ slug: raw }: { slug: string }) {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
-  const catalogPosts = useMemo(() => useContentMemoryStore.getState().mergeWithSeed(seedPosts), [userPosts]);
+  const mergedCatalogPosts = useMemo(
+    () => mergePostsForFeed(seedPosts, catalogPosts, userPosts),
+    [userPosts, catalogPosts],
+  );
 
   const key = topicSlugFromPathSegment(raw);
-  const topicHit = useMemo(() => buildTopicHits(catalogPosts, creators).find((t) => t.slug === key), [catalogPosts, key]);
+  const topicHit = useMemo(
+    () => buildTopicHits(mergedCatalogPosts, creators).find((t) => t.slug === key),
+    [mergedCatalogPosts, key],
+  );
   const topicPosts = useMemo(
-    () => catalogPosts.filter((p) => p.tags.some((tag) => slugifyTag(tag) === key)),
-    [catalogPosts, key],
+    () => mergedCatalogPosts.filter((p) => p.tags.some((tag) => slugifyTag(tag) === key)),
+    [mergedCatalogPosts, key],
   );
 
   if (!topicHit && topicPosts.length === 0) {

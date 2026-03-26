@@ -22,13 +22,12 @@ import { useInteractionsStore } from "@/lib/interactions/store";
 import type { Creator } from "@/lib/types";
 import { creators, posts as seedPosts } from "@/lib/mock-data";
 import { useAccountRegistryStore } from "@/lib/accounts/registryStore";
-import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { mergePostsForFeed, useContentMemoryStore } from "@/lib/content/contentMemoryStore";
+import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { cn } from "@/lib/cn";
 import { CreatorSearchRow } from "./creator-search-row";
 import { PostSearchCard } from "./post-search-card";
 import { BoardSearchCard } from "./board-search-card";
-import { PageHeader } from "@/components/layout/PageHeader";
-
 function tabHasResults(tab: SearchTab, s: ReturnType<typeof runSearch>): boolean {
   switch (tab) {
     case "top":
@@ -64,14 +63,15 @@ export function SearchExperience() {
   const savedCreatorIds = useInteractionsStore((s) => s.savedCreatorIds);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
   const registryById = useAccountRegistryStore((s) => s.byId);
+  const catalogPosts = useFeedCatalogStore((s) => s.posts);
 
   const searchCatalog = useMemo(() => {
-    const merged = useContentMemoryStore.getState().mergeWithSeed(seedPosts);
+    const merged = mergePostsForFeed(seedPosts, catalogPosts, userPosts);
     const byId = new Map<string, Creator>();
     for (const c of creators) byId.set(c.id, c);
     for (const c of Object.values(registryById)) byId.set(c.id, c);
     return { posts: merged, creators: Array.from(byId.values()) };
-  }, [userPosts, registryById]);
+  }, [userPosts, catalogPosts, registryById]);
 
   const meFollowingSlice = followingByUserId[meId ?? ""];
   const meFollowing = useMemo(() => meFollowingSlice ?? [], [meFollowingSlice]);
