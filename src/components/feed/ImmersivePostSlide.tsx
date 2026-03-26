@@ -28,8 +28,23 @@ import { RemixModal } from "@/components/modals/RemixModal";
 import { CommentDrawer } from "@/components/drawers/CommentDrawer";
 import { CreatorBadge } from "@/components/badges/CreatorBadge";
 import { cn } from "@/lib/cn";
+import { useAccountRegistryStore } from "@/lib/accounts/registryStore";
 import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
-import type { Post } from "@/lib/types";
+import type { Creator, Post } from "@/lib/types";
+
+function fallbackCreator(id: string): Creator {
+  return {
+    id,
+    username: "unknown",
+    displayName: "Unknown creator",
+    avatarUrl:
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&h=240&q=80",
+    bio: "",
+    creatorCategory: "Creator",
+    tags: [],
+    isVerified: false,
+  };
+}
 import { useMeId } from "@/lib/auth/meId";
 import { useInteractionsStore } from "@/lib/interactions/store";
 import { cloneFollowingGraph } from "@/lib/social/followGraph";
@@ -48,7 +63,13 @@ export function ImmersivePostSlide({ post }: { post: Post }) {
   const isFollowingFromSeed = (creatorId: string) => seedMeFollowingIds.includes(creatorId);
 
   const router = useRouter();
-  const creator = getCreatorByIdResolved(post.creatorId)!;
+  const registrySig = useAccountRegistryStore((s) => {
+    const c = s.byId[post.creatorId];
+    return c ? `${c.username}\0${c.displayName}\0${c.avatarUrl}` : "";
+  });
+  const creator = useMemo(() => {
+    return getCreatorByIdResolved(post.creatorId) ?? fallbackCreator(post.creatorId);
+  }, [post.creatorId, registrySig]);
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const inView = useInView(rootRef, { amount: 0.55 });
@@ -74,13 +95,13 @@ export function ImmersivePostSlide({ post }: { post: Post }) {
 
   const likedLive = useInteractionsStore((s) => s.likedPostIds.includes(post.id));
   const savedLive = useInteractionsStore((s) => s.savedPostIds.includes(post.id));
-  const followingLive = useInteractionsStore((s) => s.isFollowing(creator.id));
+  const followingLive = useInteractionsStore((s) => s.isFollowing(post.creatorId));
   const shareDeltaLive = useInteractionsStore((s) => s.shareCountsByPostId[post.id] ?? 0);
   const commentsTotal = useInteractionsStore((s) => s.commentsByPostId[post.id]?.length ?? 0);
 
   const liked = socialMounted ? likedLive : false;
   const saved = socialMounted ? savedLive : false;
-  const following = socialMounted ? followingLive : isFollowingFromSeed(creator.id);
+  const following = socialMounted ? followingLive : isFollowingFromSeed(post.creatorId);
   const shareDelta = socialMounted ? shareDeltaLive : 0;
 
   const toggleFollow = useInteractionsStore((s) => s.toggleFollow);
