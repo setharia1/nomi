@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createGoogleGenAI, formatGenAiError, videoOperationFromName } from "@/lib/server/google-genai";
+import { googleErrorSuggestedStatus, withGoogleApiRetries } from "@/lib/server/googleApiRetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -20,9 +21,11 @@ export async function GET(request: Request) {
 
   try {
     const ai = createGoogleGenAI();
-    const operation = await ai.operations.getVideosOperation({
-      operation: videoOperationFromName(name),
-    });
+    const operation = await withGoogleApiRetries(() =>
+      ai.operations.getVideosOperation({
+        operation: videoOperationFromName(name),
+      }),
+    );
 
     const errMsg =
       operation.error && typeof operation.error === "object" && "message" in operation.error
@@ -36,6 +39,9 @@ export async function GET(request: Request) {
       error: errMsg,
     });
   } catch (err) {
-    return NextResponse.json({ error: formatGenAiError(err) }, { status: 502 });
+    return NextResponse.json(
+      { error: formatGenAiError(err) },
+      { status: googleErrorSuggestedStatus(err) },
+    );
   }
 }

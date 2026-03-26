@@ -5,6 +5,11 @@ import {
   formatGenAiError,
   videoOperationFromName,
 } from "@/lib/server/google-genai";
+import {
+  fetchGoogleKeyedResource,
+  googleErrorSuggestedStatus,
+  withGoogleApiRetries,
+} from "@/lib/server/googleApiRetry";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -25,9 +30,11 @@ export async function GET(request: Request) {
 
   try {
     const ai = createGoogleGenAI();
-    const operation = await ai.operations.getVideosOperation({
-      operation: videoOperationFromName(name),
-    });
+    const operation = await withGoogleApiRetries(() =>
+      ai.operations.getVideosOperation({
+        operation: videoOperationFromName(name),
+      }),
+    );
 
     if (!operation.done) {
       return NextResponse.json({ error: "Video is not ready yet" }, { status: 409 });
@@ -68,10 +75,7 @@ export async function GET(request: Request) {
 
     if (video.uri) {
       const key = requireGeminiApiKey();
-      const res = await fetch(video.uri, {
-        headers: { "x-goog-api-key": key },
-        redirect: "follow",
-      });
+      const res = await fetchGoogleKeyedResource(video.uri, key);
       if (!res.ok) {
         return NextResponse.json(
           { error: `Download failed (${res.status})` },
@@ -89,6 +93,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ error: "Video has no uri or bytes" }, { status: 502 });
   } catch (err) {
-    return NextResponse.json({ error: formatGenAiError(err) }, { status: 502 });
+    return NextResponse.json(
+      { error: formatGenAiError(err) },
+      { status: googleErrorSuggestedStatus(err) },
+    );
   }
 }

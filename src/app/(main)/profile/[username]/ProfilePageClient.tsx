@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { notFound, useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileTabs } from "./ProfileTabs";
 import { getMoodBoardsForCreator } from "@/lib/mock-data";
@@ -75,7 +76,21 @@ export function ProfilePageClient() {
   }
 
   if (!creator) {
-    notFound();
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 pb-12 text-center">
+        <p className="font-[family-name:var(--font-syne)] text-lg font-semibold text-white">Profile not found</p>
+        <p className="max-w-sm text-sm text-white/45">
+          This handle isn&apos;t on Nomi yet, or the network couldn&apos;t load it. Check the spelling or try again in
+          a moment.
+        </p>
+        <Link
+          href="/home"
+          className="rounded-full border border-white/15 bg-white/[0.06] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:border-violet-400/35 hover:bg-white/[0.09]"
+        >
+          Back to home
+        </Link>
+      </div>
+    );
   }
 
   const isSelf = isSelfProfileSlug(username);

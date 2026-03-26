@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { GenerateVideosConfig } from "@google/genai";
 import { VideoCompressionQuality } from "@google/genai";
 import { createGoogleGenAI, formatGenAiError } from "@/lib/server/google-genai";
+import { googleErrorSuggestedStatus, withGoogleApiRetries } from "@/lib/server/googleApiRetry";
 
 export const runtime = "nodejs";
 /** Room for large MP4 passthrough on hosts like Vercel (requires Pro for >60s). */
@@ -32,10 +33,10 @@ function veoConfigFromEnv(aspectRatio: "16:9" | "9:16"): {
   }
 
   const compress = process.env.VEO_VIDEO_COMPRESSION?.trim().toLowerCase();
-  if (compress === "optimized" || compress === "opt" || compress === "small") {
-    config.compressionQuality = VideoCompressionQuality.OPTIMIZED;
-  } else if (compress === "lossless" || compress === "high") {
+  if (compress === "lossless" || compress === "high") {
     config.compressionQuality = VideoCompressionQuality.LOSSLESS;
+  } else if (compress === "optimized" || compress === "opt" || compress === "small") {
+    config.compressionQuality = VideoCompressionQuality.OPTIMIZED;
   }
 
   const resRaw = process.env.VEO_VIDEO_RESOLUTION?.trim().toLowerCase();
@@ -55,6 +56,20 @@ function veoConfigFromEnv(aspectRatio: "16:9" | "9:16"): {
       : "Veo does not offer 480p. Using 720p with OPTIMIZED compression (closest to a smaller file).";
   } else if (resRaw === "720p" || resRaw === "1080p" || resRaw === "4k") {
     config.resolution = resRaw;
+  }
+
+  /**
+   * Defaults favor smaller MP4s (Vercel Blob / free-tier storage). Override via env:
+   * VEO_VIDEO_COMPRESSION=lossless, VEO_VIDEO_RESOLUTION=1080p|4k, VEO_VIDEO_DURATION_SECONDS=…
+   */
+  if (config.compressionQuality == null) {
+    config.compressionQuality = VideoCompressionQuality.OPTIMIZED;
+  }
+  if (config.resolution == null) {
+    config.resolution = "720p";
+  }
+  if (config.durationSeconds == null) {
+    config.durationSeconds = 5;
   }
 
   return { config, resolutionNote, requestedResolution };
@@ -90,11 +105,13 @@ export async function POST(request: Request) {
 
   try {
     const ai = createGoogleGenAI();
-    const operation = await ai.models.generateVideos({
-      model,
-      prompt: prompt.trim(),
-      config,
-    });
+    const operation = await withGoogleApiRetries(() =>
+      ai.models.generateVideos({
+        model,
+        prompt: prompt.trim(),
+        config,
+      }),
+    );
 
     if (!operation.name) {
       return NextResponse.json({ error: "Video generation did not return an operation name" }, { status: 502 });
@@ -114,6 +131,9 @@ export async function POST(request: Request) {
       },
     });
   } catch (err) {
-    return NextResponse.json({ error: formatGenAiError(err) }, { status: 502 });
+    return NextResponse.json(
+      { error: formatGenAiError(err) },
+      { status: googleErrorSuggestedStatus(err) },
+    );
   }
 }
