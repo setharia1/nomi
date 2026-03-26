@@ -17,6 +17,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const KEYS = [
   "GOOGLE_GENERATIVE_AI_API_KEY",
+  "BLOB_READ_WRITE_TOKEN",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
   "GEMINI_MODEL",

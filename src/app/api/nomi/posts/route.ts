@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Post } from "@/lib/types";
 import { loadDbWithSession } from "@/lib/server/nomiSession";
 import { saveNomiDb } from "@/lib/server/nomiDb";
+import { rewritePostDataUrlsForStorage } from "@/lib/server/postMediaBlob";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -35,9 +36,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Post must belong to your account" }, { status: 403 });
   }
 
+  const stored = await rewritePostDataUrlsForStorage(post, accountId);
+
   const list = db.postsByAccountId[accountId] ?? [];
-  const rest = list.filter((p) => p.id !== post.id);
-  const next = [post, ...rest];
+  const rest = list.filter((p) => p.id !== stored.id);
+  const next = [stored, ...rest];
   db.postsByAccountId[accountId] = next;
   await saveNomiDb(db);
   return NextResponse.json({ ok: true, posts: next });
@@ -62,7 +65,11 @@ export async function PUT(req: Request) {
       ? (Array.isArray((body as { posts: unknown }).posts) ? (body as { posts: Post[] }).posts : [])
       : [];
 
-  const safe = posts.filter((p) => p && p.creatorId === accountId);
+  const safe: Post[] = [];
+  for (const p of posts) {
+    if (!p || p.creatorId !== accountId) continue;
+    safe.push(await rewritePostDataUrlsForStorage(p, accountId));
+  }
   db.postsByAccountId[accountId] = safe;
   await saveNomiDb(db);
   return NextResponse.json({ ok: true, posts: safe });

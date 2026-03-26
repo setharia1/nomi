@@ -4,6 +4,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 Video and text generation go through **server** routes (`/api/gemini`, `/api/video/*`). The value in `GOOGLE_GENERATIVE_AI_API_KEY` is used for **every visitor**; there is no per-user key in the browser. Copy [.env.example](.env.example) to `.env.local` for local dev, and add the same variables to your hosting provider’s **environment** (e.g. Vercel → Settings → Environment Variables) for production so people other than you can generate. Do not use a `NEXT_PUBLIC_` prefix on the API key.
 
+## Feeds, video posts, and discovery
+
+Published posts are stored in the Nomi DB (Redis/file/local). The **global feed** uses `GET /api/nomi/posts/catalog`, which aggregates everyone’s posts.
+
+When you publish a video or image, the app uploads media to **[Vercel Blob](https://vercel.com/docs/storage/vercel-blob)** (if `BLOB_READ_WRITE_TOKEN` is set) so files get a **public HTTPS URL**. That URL is what gets saved on the post—so other users’ browsers can load the same clip in Home / Explore / profiles. Without Blob, media may stay as `data:` or `blob:` URLs and will **not** reliably show for other people.
+
+**Account search** uses `GET /api/nomi/accounts` and `GET /api/nomi/accounts/search` backed by the same DB. Pair **Upstash Redis** (see below) on Vercel so new sign-ups stay in one shared directory everyone can query.
+
 ## Getting Started
 
 First, run the development server:
@@ -42,6 +50,7 @@ Add these for **Production** (and **Preview** if you want previews to generate /
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `GOOGLE_GENERATIVE_AI_API_KEY` | **Yes** | Gemini + Veo from [Google AI Studio](https://aistudio.google.com/apikey). Same as local `.env.local` — server-only, never `NEXT_PUBLIC_`. |
+| `BLOB_READ_WRITE_TOKEN` | Strongly recommended | [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) — public URLs for posted videos/images so the **global feed** and other users can load your media. Create a Blob store in the Vercel project and add the **read/write** token. |
 | `UPSTASH_REDIS_REST_URL` | Strongly recommended | Account data, posts, sessions, follows persist across serverless instances and cold starts. Without Redis, the app uses in-memory storage on Vercel (data resets). |
 | `UPSTASH_REDIS_REST_TOKEN` | Strongly recommended | Paired with the URL above ([Upstash](https://upstash.com/) → create Redis → REST API). |
 

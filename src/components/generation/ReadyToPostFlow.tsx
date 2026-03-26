@@ -62,7 +62,7 @@ export function ReadyToPostFlow({ jobId }: { jobId: string }) {
       posterDataUrl,
     });
 
-    useContentMemoryStore.getState().publishPost(post);
+    await useContentMemoryStore.getState().publishPost(post);
     removeJob(job.id);
 
     const drafts = useDraftsStore.getState().list;

@@ -6,6 +6,10 @@ import type { PostDraft } from "@/lib/create/types";
 import { posts as seedPosts } from "@/lib/mock-data";
 import { useFeedCatalogStore } from "@/lib/feed/feedCatalogStore";
 import { useAuthStore } from "@/lib/auth/authStore";
+import {
+  ensurePostMediaPublicUrls,
+  postNeedsPublicMediaUpload,
+} from "@/lib/media/blobClientUpload";
 
 const KEY = "nomi-user-posts-v1";
 
@@ -50,7 +54,8 @@ type ContentMemoryState = {
   hydrated: boolean;
   userPosts: Post[];
   hydrate: () => void;
-  publishPost: (post: Post) => void;
+  /** Uploads media to public blob URLs when configured, then saves to the server and local cache. */
+  publishPost: (post: Post) => Promise<void>;
   removeUserPost: (id: string) => void;
   mergeWithSeed: (seed: Post[]) => Post[];
 };
@@ -64,25 +69,50 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
     set({ userPosts: loadFromDisk(), hydrated: true });
   },
 
-  publishPost: (post) => {
+  publishPost: async (post) => {
     const stamped = normalizeUserPost(post);
-    const rest = get().userPosts.filter((p) => p.id !== stamped.id);
-    const next = [stamped, ...rest];
-    set({ userPosts: next });
-    persistToDisk(next);
-
     const token = useAuthStore.getState().token;
+    const account = useAuthStore.getState().account;
+
+    let toSave = stamped;
+    if (token && account?.id && postNeedsPublicMediaUpload(stamped)) {
+      try {
+        toSave = await ensurePostMediaPublicUrls(stamped, account.id, token);
+      } catch {
+        /* e.g. BLOB_READ_WRITE_TOKEN missing — fall through and let server / local handle */
+      }
+    }
+
+    const rest = get().userPosts.filter((p) => p.id !== toSave.id);
+    const nextLocal = [toSave, ...rest];
+    set({ userPosts: nextLocal });
+    persistToDisk(nextLocal);
+
     if (token) {
-      void fetch("/api/nomi/posts", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(stamped),
-      })
-        .then(() => useFeedCatalogStore.getState().hydrate())
-        .catch(() => {});
+      try {
+        const res = await fetch("/api/nomi/posts", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(toSave),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { posts?: Post[] };
+          const list = data.posts ?? [];
+          const saved = list.find((p) => p.id === toSave.id);
+          if (saved) {
+            const restAfter = get().userPosts.filter((p) => p.id !== saved.id);
+            const merged = [saved, ...restAfter];
+            set({ userPosts: merged });
+            persistToDisk(merged);
+          }
+        }
+      } catch {
+        /* offline */
+      }
+      void useFeedCatalogStore.getState().hydrate();
     }
   },
 

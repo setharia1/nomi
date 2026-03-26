@@ -137,7 +137,7 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
       creatorId: requireMeId(),
       posterDataUrl,
     });
-    useContentMemoryStore.getState().publishPost(published);
+    await useContentMemoryStore.getState().publishPost(published);
     if (draftId) deleteDraft(draftId);
     if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
     setSessionMediaUrl(null);
