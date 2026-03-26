@@ -7,10 +7,10 @@ import { CreatorBadge } from "@/components/badges/CreatorBadge";
 import { GlowButton } from "@/components/ui/GlowButton";
 import type { Creator } from "@/lib/types";
 import { useInteractionsStore, ME_ID } from "@/lib/interactions/store";
-import { mergeSelfProfileIntoCreator } from "@/lib/profile/meCreator";
+import { useHydrationSafeCreator } from "@/lib/profile/useHydrationSafeCreator";
 
 export function FeaturedCreatorCard({ creator: creatorProp }: { creator: Creator }) {
-  const creator = mergeSelfProfileIntoCreator(creatorProp);
+  const creator = useHydrationSafeCreator(creatorProp);
   const isFollowing = useInteractionsStore((s) => s.isFollowing(creator.id));
   const toggleFollow = useInteractionsStore((s) => s.toggleFollow);
   const followerCount = useInteractionsStore((s) => s.getFollowerCount(creator.id));

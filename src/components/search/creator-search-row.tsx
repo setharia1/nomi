@@ -7,6 +7,7 @@ import { CreatorBadge } from "@/components/badges/CreatorBadge";
 import { GlowButton } from "@/components/ui/GlowButton";
 import { cn } from "@/lib/cn";
 import { useInteractionsStore, ME_ID } from "@/lib/interactions/store";
+import { useHydrationSafeCreator } from "@/lib/profile/useHydrationSafeCreator";
 import type { Creator } from "@/lib/types";
 
 function formatFollowers(n: number) {
@@ -26,6 +27,7 @@ export function CreatorSearchRow({
   previewTags?: string[];
   className?: string;
 }) {
+  const displayCreator = useHydrationSafeCreator(creator);
   const isFollowing = useInteractionsStore((s) => s.isFollowing(creator.id));
   const toggleFollow = useInteractionsStore((s) => s.toggleFollow);
   const followerCount = useInteractionsStore((s) => s.getFollowerCount(creator.id));
@@ -42,36 +44,36 @@ export function CreatorSearchRow({
     >
       <div className="flex gap-3 items-start">
         <Link
-          href={`/profile/${encodeURIComponent(creator.username)}`}
+          href={`/profile/${encodeURIComponent(displayCreator.username)}`}
           className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/15 ring-1 ring-white/5 tap-highlight-none"
         >
-          <Image src={creator.avatarUrl} alt="" fill className="object-cover" sizes="56px" />
+          <Image src={displayCreator.avatarUrl} alt="" fill className="object-cover" sizes="56px" />
         </Link>
         <div className="min-w-0 flex-1">
-          <Link href={`/profile/${encodeURIComponent(creator.username)}`} className="tap-highlight-none">
+          <Link href={`/profile/${encodeURIComponent(displayCreator.username)}`} className="tap-highlight-none">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="truncate font-semibold text-white">{creator.displayName}</span>
-              <CreatorBadge verified={creator.isVerified} premium={creator.isPremium} />
+              <span className="truncate font-semibold text-white">{displayCreator.displayName}</span>
+              <CreatorBadge verified={displayCreator.isVerified} premium={displayCreator.isPremium} />
             </div>
-            <p className="truncate text-xs text-white/45">@{creator.username}</p>
+            <p className="truncate text-xs text-white/45">@{displayCreator.username}</p>
           </Link>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] font-medium text-white/70">
-              {creator.creatorCategory}
+              {displayCreator.creatorCategory}
             </span>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-white/35">
               {formatFollowers(followerCount)} followers
             </span>
-            {creator.tags[0] ? (
+            {displayCreator.tags[0] ? (
               <span className="rounded-lg bg-cyan-400/10 px-2 py-0.5 text-[10px] font-medium text-cyan-200/90">
-                {creator.tags[0]}
+                {displayCreator.tags[0]}
               </span>
             ) : null}
           </div>
           {reason ? (
             <p className="mt-1 text-[11px] font-medium text-violet-200/80">{reason}</p>
           ) : null}
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/55">{creator.bio}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/55">{displayCreator.bio}</p>
           {previewTags?.length ? (
             <div className="mt-2 flex flex-wrap gap-1">
               {previewTags.slice(0, 4).map((t) => (

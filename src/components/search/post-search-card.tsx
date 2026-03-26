@@ -5,8 +5,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Bookmark, Clapperboard, Heart, ImageIcon, Sparkles, Video } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { feedTabLabels } from "@/lib/mock-data";
-import { getCreatorByIdResolved } from "@/lib/profile/meCreator";
+import { feedTabLabels, getCreatorById } from "@/lib/mock-data";
+import { useHydrationSafeCreator } from "@/lib/profile/useHydrationSafeCreator";
 import { slugifyTag } from "@/lib/search/slug";
 import { useInteractionsStore } from "@/lib/interactions/store";
 import type { Post } from "@/lib/types";
@@ -40,7 +40,7 @@ export function PostSearchCard({
   reason?: string;
   className?: string;
 }) {
-  const creator = getCreatorByIdResolved(post.creatorId)!;
+  const creator = useHydrationSafeCreator(getCreatorById(post.creatorId)!);
   const isSaved = useInteractionsStore((s) => s.isSaved(post.id));
   const toggleSave = useInteractionsStore((s) => s.toggleSave);
   const isLiked = useInteractionsStore((s) => s.isLiked(post.id));
