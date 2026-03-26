@@ -25,6 +25,7 @@ function getRedis(): Redis | null {
 }
 
 const redis = getRedis();
+let warnedEphemeralMode = false;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -37,7 +38,8 @@ function getMemoryDb(): NomiDb {
 }
 
 async function readFileDb(): Promise<NomiDb> {
-  const fp = path.join(process.cwd(), ...FILE_REL);
+  const fp = resolveFileDbPath();
+  if (!fp) return emptyDb();
   try {
     const raw = await fs.readFile(fp, "utf8");
     const parsed = JSON.parse(raw) as NomiDb;
@@ -58,9 +60,33 @@ async function readFileDb(): Promise<NomiDb> {
 }
 
 async function writeFileDb(db: NomiDb) {
-  const fp = path.join(process.cwd(), ...FILE_REL);
+  const fp = resolveFileDbPath();
+  if (!fp) {
+    globalThis.__nomiDbMem = db;
+    return;
+  }
   await fs.mkdir(path.dirname(fp), { recursive: true });
   await fs.writeFile(fp, JSON.stringify(db), "utf8");
+}
+
+function resolveFileDbPath(): string | null {
+  const explicit = process.env.NOMI_DB_FILE_PATH?.trim();
+  if (explicit) {
+    return path.isAbsolute(explicit) ? explicit : path.join(process.cwd(), explicit);
+  }
+  if (process.env.NODE_ENV === "development") {
+    return path.join(process.cwd(), ...FILE_REL);
+  }
+  return null;
+}
+
+function warnEphemeralDbMode() {
+  if (warnedEphemeralMode || process.env.NODE_ENV === "development") return;
+  warnedEphemeralMode = true;
+  // Production serverless instances reset memory on cold start/redeploy.
+  console.warn(
+    "Nomi DB is using in-memory fallback. Configure UPSTASH_REDIS_REST_URL/TOKEN (recommended) or NOMI_DB_FILE_PATH for persistent storage.",
+  );
 }
 
 export async function loadNomiDb(): Promise<NomiDb> {
@@ -73,9 +99,10 @@ export async function loadNomiDb(): Promise<NomiDb> {
       return emptyDb();
     }
   }
-  if (process.env.NODE_ENV === "development") {
+  if (resolveFileDbPath()) {
     return readFileDb();
   }
+  warnEphemeralDbMode();
   return getMemoryDb();
 }
 
@@ -84,10 +111,11 @@ export async function saveNomiDb(db: NomiDb) {
     await redis.set(REDIS_KEY, JSON.stringify(db));
     return;
   }
-  if (process.env.NODE_ENV === "development") {
+  if (resolveFileDbPath()) {
     await writeFileDb(db);
     return;
   }
+  warnEphemeralDbMode();
   globalThis.__nomiDbMem = db;
 }
 

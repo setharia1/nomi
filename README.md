@@ -42,10 +42,11 @@ Add these for **Production** (and **Preview** if you want previews to generate /
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `GOOGLE_GENERATIVE_AI_API_KEY` | **Yes** | Gemini + Veo from [Google AI Studio](https://aistudio.google.com/apikey). Same as local `.env.local` — server-only, never `NEXT_PUBLIC_`. |
-| `UPSTASH_REDIS_REST_URL` | Strongly recommended | Account data, posts, sessions, follows persist across serverless instances and cold starts. Without Redis, the app uses in-memory storage on Vercel (data resets). |
+| `UPSTASH_REDIS_REST_URL` | Strongly recommended | Account data, posts, sessions, follows persist across serverless instances and cold starts. Without Redis, configure `NOMI_DB_FILE_PATH` to use mounted persistent disk; otherwise the app uses in-memory storage and data can reset. |
 | `UPSTASH_REDIS_REST_TOKEN` | Strongly recommended | Paired with the URL above ([Upstash](https://upstash.com/) → create Redis → REST API). |
+| `NOMI_DB_FILE_PATH` | Optional fallback | Absolute or relative JSON file path for persistent storage when Redis is unavailable (must point to persistent mounted storage in your host/container). |
 
-Optional (see [.env.example](.env.example)): `GEMINI_MODEL`, `VEO_MODEL`, `VEO_GENERATE_AUDIO`, `VEO_VIDEO_DURATION_SECONDS`, `VEO_VIDEO_RESOLUTION`, `VEO_VIDEO_COMPRESSION`.
+Optional (see [.env.example](.env.example)): `NOMI_DB_FILE_PATH`, `GEMINI_MODEL`, `VEO_MODEL`, `VEO_GENERATE_AUDIO`, `VEO_VIDEO_DURATION_SECONDS`, `VEO_VIDEO_RESOLUTION`, `VEO_VIDEO_COMPRESSION`.
 
 After changing variables, trigger a **redeploy** (Deployments → ⋮ → Redeploy) so new values load.
 
@@ -55,6 +56,6 @@ From a machine where you’re logged into Vercel (`npx vercel login`) and the re
 npm run vercel:env
 ```
 
-(Add `UPSTASH_*` to `.env.local` first if you use Redis; empty keys are skipped.)
+(Add `UPSTASH_*` and/or `NOMI_DB_FILE_PATH` to `.env.local` first; empty keys are skipped.)
 
 The easiest way to deploy is the [Vercel](https://vercel.com/new) import from GitHub flow. See [Next.js on Vercel](https://nextjs.org/docs/app/building-your-application/deploying) for more.
