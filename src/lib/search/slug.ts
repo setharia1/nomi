@@ -1,3 +1,5 @@
+import { safeDecodeURIComponent } from "@/lib/url/safeDecode";
+
 export function slugifyTag(label: string): string {
   return label
     .toLowerCase()
@@ -8,5 +10,5 @@ export function slugifyTag(label: string): string {
 }
 
 export function topicSlugFromPathSegment(segment: string): string {
-  return decodeURIComponent(segment).toLowerCase();
+  return safeDecodeURIComponent(segment).toLowerCase();
 }

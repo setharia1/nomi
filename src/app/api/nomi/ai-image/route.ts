@@ -36,7 +36,9 @@ export async function POST(request: Request) {
 
   const prompt =
     typeof body === "object" && body !== null && "prompt" in body
-      ? String((body as { prompt: unknown }).prompt).trim()
+      ? typeof (body as { prompt: unknown }).prompt === "string"
+        ? (body as { prompt: string }).prompt.trim()
+        : ""
       : "";
   if (!prompt) {
     return NextResponse.json({ error: "prompt (non-empty string) is required" }, { status: 400 });

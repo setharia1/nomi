@@ -2,6 +2,7 @@ import type { Creator } from "@/lib/types";
 import { resolveCreator, resolveCreatorByUsername } from "@/lib/accounts/resolveCreator";
 import { getMeId } from "@/lib/auth/meId";
 import { getSelfProfileOverrides } from "./selfProfileStorage";
+import { safeDecodeURIComponent } from "@/lib/url/safeDecode";
 
 export function mergeSelfProfileIntoCreator(creator: Creator): Creator {
   const me = getMeId();
@@ -38,7 +39,7 @@ export function resolveProfileCreator(usernameFromUrl: string): Creator | null {
   const meCreator = resolveCreator(me);
   if (!meCreator) return null;
   const o = getSelfProfileOverrides();
-  const slug = decodeURIComponent(usernameFromUrl).trim().toLowerCase().replace(/^@+/, "");
+  const slug = safeDecodeURIComponent(usernameFromUrl, "").trim().toLowerCase().replace(/^@+/, "");
   const effective = (o?.username?.trim() || meCreator.username).toLowerCase();
   if (slug === effective) return meCreator;
   return null;

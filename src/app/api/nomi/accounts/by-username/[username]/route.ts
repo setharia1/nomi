@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { loadNomiDb } from "@/lib/server/nomiDb";
 import { accountToCreator, stripAccount } from "@/lib/server/nomiTypes";
+import { safeDecodeURIComponent } from "@/lib/url/safeDecode";
 
 type Ctx = { params: Promise<{ username: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { username: raw } = await ctx.params;
-  const username = decodeURIComponent(raw || "")
+  const username = safeDecodeURIComponent(raw || "")
     .trim()
     .replace(/^@+/, "")
     .toLowerCase();

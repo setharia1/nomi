@@ -19,11 +19,20 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: HandleUploadBody;
+  let body: unknown;
   try {
-    body = (await request.json()) as HandleUploadBody;
+    body = (await request.json()) as unknown;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const isBodyObject = typeof body === "object" && body !== null;
+  const pathname =
+    isBodyObject && "pathname" in body
+      ? (body as { pathname: unknown }).pathname
+      : undefined;
+  if (typeof pathname !== "string" || !pathname.trim()) {
+    return NextResponse.json({ error: "Invalid upload request payload" }, { status: 400 });
   }
 
   const prefix = `nomi/${accountId}/`;
@@ -32,7 +41,7 @@ export async function POST(request: Request): Promise<Response> {
     const jsonResponse = await handleUpload({
       token: blobToken,
       request,
-      body,
+      body: body as HandleUploadBody,
       onBeforeGenerateToken: async (pathname) => {
         if (!pathname.startsWith(prefix)) {
           throw new Error("Invalid upload path");
