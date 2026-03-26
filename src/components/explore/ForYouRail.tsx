@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { posts as seedPosts } from "@/lib/mock-data";
 import { useContentMemoryStore } from "@/lib/content/contentMemoryStore";
-import { ME_CREATOR_ID } from "@/lib/profile/meCreator";
-import { rankForYouFeed } from "@/lib/feed/forYouRanking";
+import { buildForYouStream } from "@/lib/feed/forYouRanking";
 import { buildPersonalizationSignals } from "@/lib/search/engine";
 import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
@@ -59,11 +58,23 @@ export function ForYouRail() {
     ],
   );
 
+  const mergedKey = useMemo(
+    () =>
+      [...merged]
+        .map((p) => p.id)
+        .sort()
+        .join(","),
+    [merged],
+  );
+  const [streamSalt, setStreamSalt] = useState(() => Math.floor(Math.random() * 1_000_000_000));
+  useEffect(() => {
+    setStreamSalt((n) => n + 1);
+  }, [mergedKey]);
+
   const list = useMemo(() => {
-    const others = merged.filter((p) => p.creatorId !== ME_CREATOR_ID);
-    if (!others.length) return [];
-    return rankForYouFeed(others, sig).slice(0, 12);
-  }, [merged, sig]);
+    if (!merged.length) return [];
+    return buildForYouStream(merged, sig, streamSalt).slice(0, 12);
+  }, [merged, sig, streamSalt]);
 
   if (!list.length) return null;
 
@@ -72,7 +83,9 @@ export function ForYouRail() {
       <div className="flex items-end justify-between">
         <div>
           <h2 className="font-[family-name:var(--font-syne)] text-lg font-bold text-white">For you</h2>
-          <p className="mt-0.5 text-xs text-white/45">From other creators — personalized from real posts only</p>
+          <p className="mt-0.5 text-xs text-white/45">
+            Your media and the network’s—personalized, with fresh uploads mixed into the stream
+          </p>
         </div>
       </div>
       <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2">

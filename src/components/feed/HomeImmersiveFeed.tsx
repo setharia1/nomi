@@ -19,7 +19,7 @@ import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
 import { buildPersonalizationSignals } from "@/lib/search/engine";
 import { feedTabLabels, posts as seedPosts } from "@/lib/mock-data";
-import { rankForYouFeed, sortFollowingFeed } from "@/lib/feed/forYouRanking";
+import { buildForYouStream, sortFollowingFeed } from "@/lib/feed/forYouRanking";
 
 export function HomeImmersiveFeed() {
   const [scope, setScope] = useState<FeedScope>("for-you");
@@ -27,6 +27,8 @@ export function HomeImmersiveFeed() {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
   const userPosts = useContentMemoryStore((s) => s.userPosts);
   const [feedMergedSynced, setFeedMergedSynced] = useState(false);
+  /** Bumps when your publishes change or you switch tab/scope so the For You order reshuffles. */
+  const [streamSalt, setStreamSalt] = useState(() => Math.floor(Math.random() * 1_000_000_000));
 
   const intHydrated = useInteractionsStore((s) => s.hydrated);
   const followingByUserId = useInteractionsStore((s) => s.followingByUserId);
@@ -66,21 +68,30 @@ export function HomeImmersiveFeed() {
     ],
   );
 
+  const userPostSignature = useMemo(
+    () => userPosts.map((p) => `${p.id}:${p.publishedAt ?? 0}`).join("|"),
+    [userPosts],
+  );
+
   useEffect(() => {
     hydrate();
     useFeedPlaybackStore.getState().hydrate();
     setFeedMergedSynced(true);
   }, [hydrate]);
 
+  useEffect(() => {
+    setStreamSalt((n) => n + 1);
+  }, [tab, scope, userPostSignature]);
+
   const list = useMemo(() => {
     if (!feedMergedSynced) return selectHomeFeedPostsSeed(tab);
     if (scope === "for-you") {
       const pool = selectForYouPoolMerged(tab);
-      return rankForYouFeed(pool, sig);
+      return buildForYouStream(pool, sig, streamSalt);
     }
     const pool = selectFollowingPoolMerged(tab, meFollowing);
     return sortFollowingFeed(pool);
-  }, [feedMergedSynced, scope, tab, userPosts, meFollowing, sig]);
+  }, [feedMergedSynced, scope, tab, userPosts, meFollowing, sig, streamSalt]);
 
   const emptyForYou = scope === "for-you" && list.length === 0;
   const emptyFollowing = scope === "following" && list.length === 0;
@@ -124,12 +135,11 @@ export function HomeImmersiveFeed() {
                     aria-hidden
                   />
                   <p className="relative font-[family-name:var(--font-syne)] text-xl font-bold text-white sm:text-2xl">
-                    For you needs more voices
+                    Nothing in {feedTabLabels[tab]} yet
                   </p>
                   <p className="relative mt-3 text-sm leading-relaxed text-white/48">
-                    This feed is everyone else’s public posts in{" "}
-                    <span className="text-white/65">{feedTabLabels[tab]}</span>, ranked for you. There aren’t other
-                    creators with posts here yet — so there’s nothing to recommend. Your own posts stay on your profile.
+                    For you brings every real publish in this category into one stream—with fresh uploads and new
+                    generations mixed in automatically. Publish a clip or photo here and it will show up in this tab.
                   </p>
                   <div className="relative mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:justify-center">
                     <Link href="/explore" className="sm:min-w-[11rem]">

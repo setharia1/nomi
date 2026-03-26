@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -11,8 +11,7 @@ import { useContentMemoryStore, sortPostsForProfileGrid } from "@/lib/content/co
 import { ME_ID, useInteractionsStore } from "@/lib/interactions/store";
 import { computeFollowerCounts } from "@/lib/social/followGraph";
 import { CURATED_TOPIC_SLUGS } from "@/lib/search/constants";
-import { ME_CREATOR_ID } from "@/lib/profile/meCreator";
-import { rankForYouFeed } from "@/lib/feed/forYouRanking";
+import { buildForYouStream } from "@/lib/feed/forYouRanking";
 
 export function ExploreDiscoveryHub() {
   const hydrate = useContentMemoryStore((s) => s.hydrate);
@@ -61,11 +60,23 @@ export function ExploreDiscoveryHub() {
 
   const topicHits = useMemo(() => buildTopicHits(catalog.posts, catalog.creators), [catalog]);
   const latest = useMemo(() => sortPostsForProfileGrid(catalog.posts).slice(0, 12), [catalog.posts]);
+  const catalogPostKey = useMemo(
+    () =>
+      [...catalog.posts]
+        .map((p) => p.id)
+        .sort()
+        .join(","),
+    [catalog.posts],
+  );
+  const [streamSalt, setStreamSalt] = useState(() => Math.floor(Math.random() * 1_000_000_000));
+  useEffect(() => {
+    setStreamSalt((n) => n + 1);
+  }, [catalogPostKey]);
+
   const forYouExplore = useMemo(() => {
-    const others = catalog.posts.filter((p) => p.creatorId !== ME_CREATOR_ID);
-    if (!others.length) return [];
-    return rankForYouFeed(others, sig).slice(0, 8);
-  }, [catalog.posts, sig]);
+    if (!catalog.posts.length) return [];
+    return buildForYouStream(catalog.posts, sig, streamSalt).slice(0, 8);
+  }, [catalog.posts, sig, streamSalt]);
 
   if (!catalog.posts.length) {
     return (
@@ -153,7 +164,9 @@ export function ExploreDiscoveryHub() {
       {forYouExplore.length ? (
         <section className="space-y-3">
           <h2 className="nomi-section-title">For you</h2>
-          <p className="text-xs text-white/45">Other creators’ posts across the network, ranked from real signals only.</p>
+          <p className="text-xs text-white/45">
+            Your publishes and everyone else’s—ranked for you, reshuffled as new media lands.
+          </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {forYouExplore.map((post) => (
               <Link

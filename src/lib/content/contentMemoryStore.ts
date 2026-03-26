@@ -134,13 +134,13 @@ export function selectHomeFeedPostsSeed(_tab: FeedTab): Post[] {
 
 /**
  * Home (see `HomeImmersiveFeed`):
- * - **For you** — `selectForYouPoolMerged` → everyone except the signed-in creator in this tab,
- *   then `rankForYouFeed` (interests, engagement, freshness, follow boost, diversity).
+ * - **For you** — `selectForYouPoolMerged` → every real published post in this tab (you + everyone else),
+ *   then `buildForYouStream` (ranked + light randomness so new uploads mix into the stream).
  * - **Following** — `selectFollowingPoolMerged` → only followed creator ids in this tab,
  *   then `sortFollowingFeed` (newest first).
  */
 export function selectForYouPoolMerged(tab: FeedTab): Post[] {
-  return selectAllPostsMerged().filter((p) => p.feedTab === tab && p.creatorId !== ME_CREATOR_ID);
+  return selectAllPostsMerged().filter((p) => p.feedTab === tab);
 }
 
 /** Following: posts only from accounts the user follows in this tab. */

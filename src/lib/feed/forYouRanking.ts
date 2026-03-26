@@ -1,5 +1,6 @@
 /**
- * For You ranking: network-wide posts from other accounts, scored for personalization.
+ * For You stream: all real posts in the tab (including yours), ranked for the viewer with
+ * light randomness so order varies and new publishes fold into the mix naturally.
  * Following uses `sortFollowingFeed` only — relationship-ordered, not this model.
  */
 import type { Post } from "@/lib/types";
@@ -18,11 +19,35 @@ function engagementScore(p: Post): number {
   return p.likes + p.comments * 2 + p.saves * 2.5 + parseViews(p.views) / 8000;
 }
 
-function forYouScore(p: Post, sig: PersonalizationSignals): number {
+function hashString(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(a: number) {
+  return function () {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Small tie-breaker so the stream isn’t identical every time; bumps when `streamSalt` changes. */
+function streamJitter(postId: string, streamSalt: number): number {
+  const rand = mulberry32(hashString(`${postId}:${streamSalt}`) >>> 0);
+  return rand() * 18;
+}
+
+export function forYouScoreBase(p: Post, sig: PersonalizationSignals): number {
   let s = 0;
   const pub = p.publishedAt ?? 0;
   const ageHours = pub > 0 ? Math.max(0, (Date.now() - pub) / 3_600_000) : 168;
-  s += Math.max(0, 96 - ageHours) * 1.8;
+  s += Math.max(0, 96 - ageHours) * 2.2;
   s += engagementScore(p) * 0.12;
   s += (p.likes + p.saves * 2) * 0.06;
 
@@ -51,11 +76,20 @@ function diversifyByCreator(sorted: Post[]): Post[] {
   return out;
 }
 
-/** For You: posts from other accounts, ranked for this viewer. */
-export function rankForYouFeed(posts: Post[], sig: PersonalizationSignals): Post[] {
+/**
+ * Full For You ordering: personalization + freshness, jittered so refreshes / new posts reshuffle the stream.
+ */
+export function buildForYouStream(
+  posts: Post[],
+  sig: PersonalizationSignals,
+  streamSalt: number,
+): Post[] {
   if (posts.length <= 1) return posts.slice();
   const sorted = posts
-    .map((p) => ({ p, score: forYouScore(p, sig) }))
+    .map((p) => ({
+      p,
+      score: forYouScoreBase(p, sig) + streamJitter(p.id, streamSalt),
+    }))
     .sort(
       (a, b) =>
         b.score - a.score ||
@@ -64,6 +98,11 @@ export function rankForYouFeed(posts: Post[], sig: PersonalizationSignals): Post
     )
     .map((x) => x.p);
   return diversifyByCreator(sorted);
+}
+
+/** Deterministic ranking (no stream jitter) — use when salt must be stable. */
+export function rankForYouFeed(posts: Post[], sig: PersonalizationSignals): Post[] {
+  return buildForYouStream(posts, sig, 0);
 }
 
 /** Following: newest first, predictable relationship feed. */
