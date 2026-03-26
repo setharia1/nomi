@@ -26,6 +26,7 @@ function getRedis(): Redis | null {
 
 const redis = getRedis();
 let warnedEphemeralMode = false;
+let checkedProductionPersistence = false;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -89,7 +90,31 @@ function warnEphemeralDbMode() {
   );
 }
 
+function isTruthyEnv(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
+function assertProductionPersistenceConfigured() {
+  if (checkedProductionPersistence || process.env.NODE_ENV === "development") return;
+  checkedProductionPersistence = true;
+  const hasRedis = !!redis;
+  const hasFilePath = !!resolveFileDbPath();
+  const allowEphemeral = isTruthyEnv(process.env.NOMI_ALLOW_EPHEMERAL_DB);
+  if (hasRedis || hasFilePath || allowEphemeral) {
+    if (allowEphemeral && !hasRedis && !hasFilePath) {
+      warnEphemeralDbMode();
+    }
+    return;
+  }
+  throw new Error(
+    "Persistent Nomi DB is not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (recommended), or set NOMI_DB_FILE_PATH to mounted persistent storage. For temporary non-persistent mode only, set NOMI_ALLOW_EPHEMERAL_DB=true.",
+  );
+}
+
 export async function loadNomiDb(): Promise<NomiDb> {
+  assertProductionPersistenceConfigured();
   if (redis) {
     const raw = await redis.get<string>(REDIS_KEY);
     if (!raw) return emptyDb();
@@ -107,6 +132,7 @@ export async function loadNomiDb(): Promise<NomiDb> {
 }
 
 export async function saveNomiDb(db: NomiDb) {
+  assertProductionPersistenceConfigured();
   if (redis) {
     await redis.set(REDIS_KEY, JSON.stringify(db));
     return;
