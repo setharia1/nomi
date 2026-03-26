@@ -6,6 +6,16 @@ import type { NomiDb } from "./nomiTypes";
 const REDIS_KEY = "nomi:db:v1";
 const FILE_REL = ["data", "nomi-cloud.json"];
 
+export type NomiPersistenceStatus = {
+  mode: "redis" | "file" | "ephemeral";
+  durable: boolean;
+  productionReady: boolean;
+  redisConfigured: boolean;
+  filePathConfigured: boolean;
+  allowEphemeral: boolean;
+  environment: string;
+};
+
 function emptyDb(): NomiDb {
   return {
     accountsById: {},
@@ -25,6 +35,8 @@ function getRedis(): Redis | null {
 }
 
 const redis = getRedis();
+let warnedEphemeralMode = false;
+let checkedProductionPersistence = false;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -37,7 +49,8 @@ function getMemoryDb(): NomiDb {
 }
 
 async function readFileDb(): Promise<NomiDb> {
-  const fp = path.join(process.cwd(), ...FILE_REL);
+  const fp = resolveFileDbPath();
+  if (!fp) return emptyDb();
   try {
     const raw = await fs.readFile(fp, "utf8");
     const parsed = JSON.parse(raw) as NomiDb;
@@ -58,12 +71,77 @@ async function readFileDb(): Promise<NomiDb> {
 }
 
 async function writeFileDb(db: NomiDb) {
-  const fp = path.join(process.cwd(), ...FILE_REL);
+  const fp = resolveFileDbPath();
+  if (!fp) {
+    globalThis.__nomiDbMem = db;
+    return;
+  }
   await fs.mkdir(path.dirname(fp), { recursive: true });
   await fs.writeFile(fp, JSON.stringify(db), "utf8");
 }
 
+function resolveFileDbPath(): string | null {
+  const explicit = process.env.NOMI_DB_FILE_PATH?.trim();
+  if (explicit) {
+    return path.isAbsolute(explicit) ? explicit : path.join(process.cwd(), explicit);
+  }
+  if (process.env.NODE_ENV === "development") {
+    return path.join(process.cwd(), ...FILE_REL);
+  }
+  return null;
+}
+
+function warnEphemeralDbMode() {
+  if (warnedEphemeralMode || process.env.NODE_ENV === "development") return;
+  warnedEphemeralMode = true;
+  // Production serverless instances reset memory on cold start/redeploy.
+  console.warn(
+    "Nomi DB is using in-memory fallback. Configure UPSTASH_REDIS_REST_URL/TOKEN (recommended) or NOMI_DB_FILE_PATH for persistent storage.",
+  );
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
+export function getNomiPersistenceStatus(): NomiPersistenceStatus {
+  const hasRedis = !!redis;
+  const hasFilePath = !!resolveFileDbPath();
+  const allowEphemeral = isTruthyEnv(process.env.NOMI_ALLOW_EPHEMERAL_DB);
+  const environment = process.env.NODE_ENV ?? "development";
+  const mode: NomiPersistenceStatus["mode"] = hasRedis ? "redis" : hasFilePath ? "file" : "ephemeral";
+  const durable = mode !== "ephemeral";
+  const productionReady = environment === "development" ? true : durable || allowEphemeral;
+  return {
+    mode,
+    durable,
+    productionReady,
+    redisConfigured: hasRedis,
+    filePathConfigured: hasFilePath,
+    allowEphemeral,
+    environment,
+  };
+}
+
+function assertProductionPersistenceConfigured() {
+  if (checkedProductionPersistence || process.env.NODE_ENV === "development") return;
+  checkedProductionPersistence = true;
+  const status = getNomiPersistenceStatus();
+  if (status.mode !== "ephemeral" || status.allowEphemeral) {
+    if (status.mode === "ephemeral" && status.allowEphemeral) {
+      warnEphemeralDbMode();
+    }
+    return;
+  }
+  throw new Error(
+    "Persistent Nomi DB is not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (recommended), or set NOMI_DB_FILE_PATH to mounted persistent storage. For temporary non-persistent mode only, set NOMI_ALLOW_EPHEMERAL_DB=true.",
+  );
+}
+
 export async function loadNomiDb(): Promise<NomiDb> {
+  assertProductionPersistenceConfigured();
   if (redis) {
     const raw = await redis.get<string>(REDIS_KEY);
     if (!raw) return emptyDb();
@@ -73,21 +151,24 @@ export async function loadNomiDb(): Promise<NomiDb> {
       return emptyDb();
     }
   }
-  if (process.env.NODE_ENV === "development") {
+  if (resolveFileDbPath()) {
     return readFileDb();
   }
+  warnEphemeralDbMode();
   return getMemoryDb();
 }
 
 export async function saveNomiDb(db: NomiDb) {
+  assertProductionPersistenceConfigured();
   if (redis) {
     await redis.set(REDIS_KEY, JSON.stringify(db));
     return;
   }
-  if (process.env.NODE_ENV === "development") {
+  if (resolveFileDbPath()) {
     await writeFileDb(db);
     return;
   }
+  warnEphemeralDbMode();
   globalThis.__nomiDbMem = db;
 }
 
