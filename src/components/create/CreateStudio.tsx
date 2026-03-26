@@ -60,10 +60,12 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
   const [sessionMime, setSessionMime] = useState<string | null>(() => loaded?.mediaMime ?? null);
   const [sessionFile, setSessionFile] = useState<File | null>(null);
   const [draftCount, setDraftCount] = useState(() => loadDrafts().length);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const resetFlow = useCallback(() => {
     if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
     setPhase("chooser");
+    setPublishError(null);
     setPath(null);
     setDraft(defaultDraft());
     setSessionMediaUrl(null);
@@ -125,25 +127,31 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
   }, [draft, path, phase, sessionFile, sessionMime]);
 
   const runPublish = useCallback(async () => {
+    setPublishError(null);
     setPhase("publishing");
     await new Promise((r) => setTimeout(r, 1300));
-    let posterDataUrl: string | null = null;
-    if (draft.mediaType === "video" && sessionMediaUrl) {
-      posterDataUrl = await captureVideoPosterDataUrl(sessionMediaUrl);
+    try {
+      let posterDataUrl: string | null = null;
+      if (draft.mediaType === "video" && sessionMediaUrl) {
+        posterDataUrl = await captureVideoPosterDataUrl(sessionMediaUrl);
+      }
+      const published = buildPostFromDraft({
+        draft,
+        mediaUrl: sessionMediaUrl,
+        creatorId: requireMeId(),
+        posterDataUrl,
+      });
+      await useContentMemoryStore.getState().publishPost(published);
+      if (draftId) deleteDraft(draftId);
+      if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
+      setSessionMediaUrl(null);
+      setSessionFile(null);
+      setDraftCount(loadDrafts().length);
+      setPhase("success");
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : "Could not publish your post.");
+      setPhase("preview");
     }
-    const published = buildPostFromDraft({
-      draft,
-      mediaUrl: sessionMediaUrl,
-      creatorId: requireMeId(),
-      posterDataUrl,
-    });
-    await useContentMemoryStore.getState().publishPost(published);
-    if (draftId) deleteDraft(draftId);
-    if (sessionMediaUrl?.startsWith("blob:")) URL.revokeObjectURL(sessionMediaUrl);
-    setSessionMediaUrl(null);
-    setSessionFile(null);
-    setDraftCount(loadDrafts().length);
-    setPhase("success");
   }, [draft, draftId, sessionMediaUrl]);
 
   const transition = {
@@ -204,6 +212,7 @@ function CreateStudioInner({ draftId }: { draftId: string | null }) {
             <StudioPreview
               draft={draft}
               mediaUrl={sessionMediaUrl}
+              publishError={publishError}
               onBack={() => setPhase("compose")}
               onPublish={runPublish}
               onSaveDraft={persistDraft}

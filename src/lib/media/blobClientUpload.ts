@@ -3,6 +3,9 @@
 import { upload } from "@vercel/blob/client";
 import type { Post } from "@/lib/types";
 
+const MEDIA_FETCH_TIMEOUT_MS = 12_000;
+const MEDIA_UPLOAD_TIMEOUT_MS = 20_000;
+
 function extForMime(mime: string): string {
   const m = mime.toLowerCase().split(";")[0] ?? "";
   if (m.includes("webm")) return "webm";
@@ -31,10 +34,26 @@ function dataUrlToBlob(dataUrl: string): { blob: Blob; mime: string } {
   return { blob: new Blob([decodeURIComponent(data)], { type: mime }), mime };
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function urlToBlob(url: string): Promise<{ blob: Blob; mime: string }> {
-  const r = await fetch(url);
+  const r = await withTimeout(fetch(url), MEDIA_FETCH_TIMEOUT_MS, "Media read");
   if (!r.ok) throw new Error("Could not read media for upload");
-  const blob = await r.blob();
+  const blob = await withTimeout(r.blob(), MEDIA_FETCH_TIMEOUT_MS, "Media decode");
   const mime = blob.type || "application/octet-stream";
   return { blob, mime };
 }
@@ -60,13 +79,17 @@ export async function ensurePostMediaPublicUrls(
   const uploadBlob = async (blob: Blob, mime: string, kind: string) => {
     const ext = extForMime(mime);
     const pathname = `${prefix}/${post.id}-${kind}-${Date.now()}.${ext}`;
-    const res = await upload(pathname, blob, {
-      access: "public",
-      handleUploadUrl: "/api/nomi/media",
-      headers,
-      contentType: mime || undefined,
-      multipart: blob.size > 8 * 1024 * 1024,
-    });
+    const res = await withTimeout(
+      upload(pathname, blob, {
+        access: "public",
+        handleUploadUrl: "/api/nomi/media",
+        headers,
+        contentType: mime || undefined,
+        multipart: blob.size > 8 * 1024 * 1024,
+      }),
+      MEDIA_UPLOAD_TIMEOUT_MS,
+      "Media upload",
+    );
     return res.url;
   };
 
@@ -131,10 +154,10 @@ async function inlineBlobUrlsInPost(post: Post): Promise<Post> {
   const one = async (url: string | undefined): Promise<string | undefined> => {
     if (!url?.startsWith("blob:")) return url;
     try {
-      const r = await fetch(url);
-      const blob = await r.blob();
+      const r = await withTimeout(fetch(url), MEDIA_FETCH_TIMEOUT_MS, "Media read");
+      const blob = await withTimeout(r.blob(), MEDIA_FETCH_TIMEOUT_MS, "Media decode");
       if (blob.size > MAX_BLOB_INLINE_BYTES) return url;
-      return await readBlobAsDataUrl(blob);
+      return await withTimeout(readBlobAsDataUrl(blob), MEDIA_FETCH_TIMEOUT_MS, "Media inline encode");
     } catch {
       return url;
     }

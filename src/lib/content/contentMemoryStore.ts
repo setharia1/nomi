@@ -92,6 +92,8 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
 
     if (token) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15_000);
         const res = await fetch("/api/nomi/posts", {
           method: "POST",
           headers: {
@@ -99,7 +101,8 @@ export const useContentMemoryStore = create<ContentMemoryState>()((set, get) => 
             "Content-Type": "application/json",
           },
           body: JSON.stringify(toSave),
-        });
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeoutId));
         if (res.ok) {
           const data = (await res.json()) as { posts?: Post[] };
           const list = data.posts ?? [];

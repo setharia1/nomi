@@ -23,12 +23,14 @@ import { cn } from "@/lib/cn";
 export function StudioPreview({
   draft,
   mediaUrl,
+  publishError,
   onBack,
   onPublish,
   onSaveDraft,
 }: {
   draft: PostDraft;
   mediaUrl: string | null;
+  publishError?: string | null;
   onBack: () => void;
   onPublish: () => void;
   onSaveDraft: () => void;
@@ -151,6 +153,11 @@ export function StudioPreview({
           Publish
         </GlowButton>
       </div>
+      {publishError ? (
+        <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-100/95">
+          {publishError}
+        </p>
+      ) : null}
     </div>
   );
 }
